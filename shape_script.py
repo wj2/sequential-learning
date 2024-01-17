@@ -44,9 +44,8 @@ if __name__ == '__main__':
 
     ss_fig = slf.ShapeSpaceSummary(shape)
     ss_fig.panel_bhv()
-    
     ss_fig.panel_decoding()
 
-    fname = args.out_template.format(shape=shape, jobid=args.jobid)
+    fname = args.output_template.format(shape=shape, jobid=args.jobid)
     ss_fig.save(fname + ".pdf", use_bf=args.output_folder)
     ss_fig.save(fname + ".svg", use_bf=args.output_folder)
