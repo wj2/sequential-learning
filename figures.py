@@ -175,9 +175,9 @@ class ShapeSpaceSummary(SequenceLearningFigure):
         )
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
-        data = kwargs.get("data", {})
-        data.update(add_data)
-        kwargs["data"] = data
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
         super().__init__(fsize, params, colors=colors, **kwargs)
 
 

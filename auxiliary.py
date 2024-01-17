@@ -31,6 +31,12 @@ default_type_dict = {
 stim_temp = "(?P<lv1>-?[0-9]+)_(?P<lv2>-?[0-9]+)_stim\.png"
 
 
+def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?"):
+    fls = os.listdir(use_folder)
+    out = list(fl for fl in fls if re.match(pattern, fl) is not None)
+    return out
+
+
 def load_stim_images(stim_folder, template=stim_temp):
     fls = os.listdir(stim_folder)
     lv1s = []
