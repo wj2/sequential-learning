@@ -184,12 +184,13 @@ def _sort_decs(
             for k, s_jk in enumerate(s_j):
                 s_j_comb[k] = s_j[k]
         outs.append(s_j_comb)
-    days = np.stack(days, axis=0)
-    shapes = np.stack(shapes, axis=0)
-    sort_inds = np.argsort(days)
-    days = days[sort_inds]
-    shapes = shapes[sort_inds]
-    outs = tuple(o[sort_inds] for o in outs)
+    if len(days) > 0:
+        days = np.stack(days, axis=0)
+        shapes = np.stack(shapes, axis=0)
+        sort_inds = np.argsort(days)
+        days = days[sort_inds]
+        shapes = shapes[sort_inds]
+        outs = tuple(o[sort_inds] for o in outs)
     return (days, shapes,) + outs
 
 
