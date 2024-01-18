@@ -47,7 +47,7 @@ def estimate_decision_boundary(
     cats_ch = data[chosen_category_field][ind].to_numpy(int)
     feats = stack_features(data[stim_feat_field], ind=ind)
 
-    m = skm.LinearSVC(dual="auto")
+    m = skm.LinearSVC()
     m.fit(feats, cats_ch)
     coherence = m.score(feats, cats_ch)
     coef = u.make_unit_vector(m.coef_)
