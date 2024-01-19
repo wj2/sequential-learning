@@ -184,6 +184,7 @@ def _sort_decs(
             for k, s_jk in enumerate(s_j):
                 s_j_comb[k] = s_j[k]
         outs.append(s_j_comb)
+    outs = tuple(outs)
     if len(days) > 0:
         days = np.stack(days, axis=0)
         shapes = np.stack(shapes, axis=0)
