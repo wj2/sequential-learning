@@ -33,6 +33,7 @@ def create_parser():
     parser.add_argument("--tend", default=500, type=float)
     parser.add_argument("--jobid", default="0000", type=str)
     parser.add_argument("--sequence_ind", default=0, type=int)
+    parser.add_argument("--fwid", default=2, type=float)    
     return parser
 
 
