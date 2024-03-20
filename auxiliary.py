@@ -1,4 +1,3 @@
-
 import os
 import scipy.io as sio
 import skimage.io as skio
@@ -32,27 +31,26 @@ default_type_dict = {
 stim_temp = "(?P<lv1>-?[0-9]+)_(?P<lv2>-?[0-9]+)_stim\.png"
 
 
-
 def load_shape_list(
-        shapes,
-        data_folder=BASEFOLDER,
-        sort_by="day",
-        max_files=np.inf,
-        exclude_invalid=True,
-        **kwargs
+    shapes,
+    data_folder=BASEFOLDER,
+    sort_by="day",
+    max_files=np.inf,
+    exclude_invalid=True,
+    **kwargs
 ):
     out_data = {}
     for shape in shapes:
         data = gio.Dataset.from_readfunc(
-            load_kiani_data_folder, 
-            os.path.join(data_folder, shape), 
-            max_files=max_files, 
+            load_kiani_data_folder,
+            os.path.join(data_folder, shape),
+            max_files=max_files,
             sort_by=sort_by,
         )
         if exclude_invalid:
             data = filter_valid(data)
         out_data[shape] = data
-    return out_data    
+    return out_data
 
 
 def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?"):
@@ -76,7 +74,7 @@ def load_stim_images(stim_folder, template=stim_temp):
             lv1s.append(lv1)
             lv2s.append(lv2)
             imgs.append(img)
-    return np.array(lv1s), np.array(lv2s), np.stack(imgs, axis=0)           
+    return np.array(lv1s), np.array(lv2s), np.stack(imgs, axis=0)
 
 
 def load_file(fname, type_dict=default_type_dict):
@@ -116,34 +114,44 @@ def load_file(fname, type_dict=default_type_dict):
 
 
 def _get_projs(
-        data, stim_feat_field="stim_feature_MAIN", cat_bound_field="cat_def_MAIN",
+    data,
+    stim_feat_field="stim_feature_MAIN",
+    cat_bound_field="cat_def_MAIN",
 ):
     feats = np.zeros((len(data), 2))
     feats[:] = np.nan
     for i, f_i in enumerate(data[stim_feat_field].to_numpy()):
         if u.check_list(f_i) and len(f_i) == 2:
             feats[i] = f_i
-    feats = feats/1000
+    feats = feats / 1000
     cat_boundary_angles, counts = np.unique(
         data[cat_bound_field].to_numpy(), return_counts=True
     )
     cba = cat_boundary_angles[np.argmax(counts)]
-    
-    cat_vec = u.make_unit_vector(np.array([
-        np.cos(np.radians(cba)),
-        -np.sin(np.radians(cba)),
-    ]))
-    anti_cat_vec = u.make_unit_vector(np.array([
-        np.cos(np.radians(cba)),
-        np.sin(np.radians(cba)),
-    ]))
+
+    cat_vec = u.make_unit_vector(
+        np.array(
+            [
+                np.cos(np.radians(cba)),
+                -np.sin(np.radians(cba)),
+            ]
+        )
+    )
+    anti_cat_vec = u.make_unit_vector(
+        np.array(
+            [
+                np.cos(np.radians(cba)),
+                np.sin(np.radians(cba)),
+            ]
+        )
+    )
     cat = feats @ cat_vec
     anticat = feats @ anti_cat_vec
     return cat, anticat
 
 
 def load_kiani_data_folder(
-        folder, templates=file_templates, monkey_name="Z", max_files=np.inf
+    folder, templates=file_templates, monkey_name="Z", max_files=np.inf
 ):
     datas = []
     n_neurs = []
@@ -162,15 +170,13 @@ def load_kiani_data_folder(
 
         n_neur_fl = data_fl["spikeTimes"][0].shape[0]
         if fl_info["region"] == "V4+FEF":
-            fef_labels = ("FEF",)*32
-            v4_labels = ("V4",)*(n_neur_fl - 32)
+            fef_labels = ("FEF",) * 32
+            v4_labels = ("V4",) * (n_neur_fl - 32)
             labels = fef_labels + v4_labels
-            data_fl["neur_regions"] = (
-                (labels,)*len(data_fl["spikeTimes"])
-            )
+            data_fl["neur_regions"] = (labels,) * len(data_fl["spikeTimes"])
         else:
-            data_fl["neur_regions"] = (
-                (((fl_info["region"],)*n_neur_fl),)*len(data_fl["spikeTimes"])
+            data_fl["neur_regions"] = (((fl_info["region"],) * n_neur_fl),) * len(
+                data_fl["spikeTimes"]
             )
         data_fl_pd = pd.DataFrame.from_dict(data_fl)
         cats = data_fl["stim_sample_MAIN"]
@@ -188,7 +194,7 @@ def load_kiani_data_folder(
         cat, anticat = _get_projs(data_fl_pd)
         data_fl_pd["cat_proj"] = cat
         data_fl_pd["anticat_proj"] = anticat
-        
+
         datas.append(data_fl_pd)
         n_neurs.append(n_neur_fl)
         files_loaded += 1
@@ -210,13 +216,13 @@ def filter_valid(
     targ_key="targ_cho",
     cho_key="chosen_cat",
     cat_key="cat_def_MAIN",
-    feat_key="stim_feature_MAIN"
+    feat_key="stim_feature_MAIN",
 ):
     mask1 = data[targ_key].one_of((1, 2))
     mask2 = data[cho_key].one_of((1, 2))
     mask3 = list(~np.isnan(cdm) for cdm in data[cat_key])
-    mask4 = list(list(
-        u.check_list(x) and len(x) == 2 for x in sfm) for sfm in data[feat_key]
+    mask4 = list(
+        list(u.check_list(x) and len(x) == 2 for x in sfm) for sfm in data[feat_key]
     )
     full_mask = mask1.rs_and(mask2).rs_and(mask3).rs_and(mask4)
     return data.mask(full_mask)

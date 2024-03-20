@@ -1,4 +1,3 @@
-
 import itertools as it
 import numpy as np
 import sklearn.svm as skm
@@ -14,28 +13,26 @@ def stack_features(feats, ind=None, div=1000):
     if ind is not None:
         feats = (feats[ind],)
     for i, feat in enumerate(feats):
-        stacked_feats.append(np.stack(feat.to_numpy(), axis=0)/div)
+        stacked_feats.append(np.stack(feat.to_numpy(), axis=0) / div)
     if ind is not None:
         stacked_feats = stacked_feats[0]
     return stacked_feats
 
 
 def _filter_and_categorize(
-        data,
-        *centroids,
-        sample_radius=100,
-        stim_feat_field="stim_feature_MAIN",
+    data,
+    *centroids,
+    sample_radius=100,
+    stim_feat_field="stim_feature_MAIN",
 ):
     masks = []
-    stim_feats = list(
-        np.stack(sf, axis=0) for sf in data[stim_feat_field]
-    )
+    stim_feats = list(np.stack(sf, axis=0) for sf in data[stim_feat_field])
     for cent in centroids:
         sub_masks = []
         if len(cent.shape) == 1:
             cent = np.expand_dims(cent, 0)
         for sf in stim_feats:
-            m_sf = np.sqrt(np.sum((sf - cent)**2, axis=1)) < sample_radius
+            m_sf = np.sqrt(np.sum((sf - cent) ** 2, axis=1)) < sample_radius
             sub_masks.append(m_sf)
         masks.append(sub_masks)
     return masks
@@ -48,12 +45,12 @@ def _parse_dates(dates):
 
 
 def compute_unit_dprime(
-        data,
-        *args,
-        cat_field="stim_sample_MAIN",
-        time_zero_field="stim_on",
-        day_field="day",
-        **kwargs,
+    data,
+    *args,
+    cat_field="stim_sample_MAIN",
+    time_zero_field="stim_on",
+    day_field="day",
+    **kwargs,
 ):
     targs = data[cat_field]
     t1_mask = targs == 1
@@ -75,22 +72,22 @@ def compute_unit_dprime(
             sig1 = np.squeeze(np.std(p1_i, axis=2))
             mu2 = np.squeeze(np.mean(p2_i, axis=2))
             sig2 = np.squeeze(np.std(p2_i, axis=2))
-            dprimes[i] = np.nanmean(np.abs(mu1 - mu2) / np.sqrt(sig1*sig2), axis=0)
+            dprimes[i] = np.nanmean(np.abs(mu1 - mu2) / np.sqrt(sig1 * sig2), axis=0)
         else:
             dprimes[i] = np.nan
     return xs, dprimes, days
 
 
 def compute_cross_shape_generalization(
-        pre_data,
-        post_data,
-        *args,
-        stim_feat_field="stim_feature_MAIN",
-        day_field="day",
-        cat_field="stim_sample_MAIN",
-        date_field="date",
-        sample_radius=300,
-        **kwargs,
+    pre_data,
+    post_data,
+    *args,
+    stim_feat_field="stim_feature_MAIN",
+    day_field="day",
+    cat_field="stim_sample_MAIN",
+    date_field="date",
+    sample_radius=300,
+    **kwargs,
 ):
     pre_dates = _parse_dates(pre_data[date_field])
     post_dates = _parse_dates(post_data[date_field])
@@ -111,7 +108,9 @@ def compute_cross_shape_generalization(
     post_ind = np.argmin(np.abs(post_targ_diff))
     if post_targ_diff[post_ind].days > 0:
         print(
-            "desired date difference is not exact, is {}".format(post_targ_diff[post_ind])
+            "desired date difference is not exact, is {}".format(
+                post_targ_diff[post_ind]
+            )
         )
     d1 = post_dates[0]
     d2 = post_dates[post_ind]
@@ -123,14 +122,16 @@ def compute_cross_shape_generalization(
     cat1_stim = data_post.mask(cat1_mask)
     c1_arr = np.stack(cat1_stim[stim_feat_field][0], axis=0)
     cat1_average = np.mean(
-        c1_arr, axis=0,
+        c1_arr,
+        axis=0,
     )
-    
+
     cat2_mask = data_post[cat_field] == 2
     cat2_stim = data_post.mask(cat2_mask)
     c2_arr = np.stack(cat2_stim[stim_feat_field][0], axis=0)
     cat2_average = np.mean(
-        c2_arr, axis=0,
+        c2_arr,
+        axis=0,
     )
 
     pre_dec_masks = _filter_and_categorize(
@@ -146,9 +147,7 @@ def compute_cross_shape_generalization(
         cat2_average,
         sample_radius=sample_radius,
     )
-    ind_pairs = (
-        (-1, 0), 
-    )
+    ind_pairs = ((-1, 0),)
     out_shape = cross_data_generalization(
         data_pre,
         pre_dec_masks,
@@ -177,14 +176,14 @@ def compute_cross_shape_generalization(
         ind_pairs=ind_pairs,
         **kwargs,
     )
-    return out_shape, out_session_pre, out_session_post    
-    
+    return out_shape, out_session_pre, out_session_post
+
 
 def estimate_nonlinear_decision_boundary(
     data,
     ind=0,
     chosen_category_field="chosen_cat",
-    stim_feat_field="stim_feature_MAIN",        
+    stim_feat_field="stim_feature_MAIN",
 ):
     cats_ch = data[chosen_category_field][ind].to_numpy(int)
     feats = stack_features(data[stim_feat_field], ind=ind)
@@ -197,7 +196,7 @@ def estimate_nonlinear_decision_boundary(
         "model": m,
     }
     return out
-    
+
 
 def estimate_decision_boundary(
     data,
@@ -214,11 +213,7 @@ def estimate_decision_boundary(
     coef = u.make_unit_vector(m.coef_)
     degree = np.degrees(np.arccos(u.make_unit_vector(np.array([-1, 1])) @ coef))
     inter = m.intercept_
-    out = {
-        "coherence": coherence,
-        "boundary": (coef, inter),
-        "degree": degree
-    }
+    out = {"coherence": coherence, "boundary": (coef, inter), "degree": degree}
     return out
 
 
@@ -228,15 +223,19 @@ def get_feature_responses(
     end,
     time_zero_field="stim_on",
     feat_field="stim_feature_MAIN",
-    **kwargs
+    **kwargs,
 ):
     pop_out = data.get_populations(
-        end - begin, begin, end, time_zero_field=time_zero_field, **kwargs,
+        end - begin,
+        begin,
+        end,
+        time_zero_field=time_zero_field,
+        **kwargs,
     )
     pops, xs = pop_out[:2]
     targ_x = (begin + end) / 2
     pops_t = []
-    x_ind = np.argmin((xs - targ_x)**2)
+    x_ind = np.argmin((xs - targ_x) ** 2)
     for i, pop in enumerate(pops):
         pops_t.append(np.squeeze(pop[..., x_ind]))
 
@@ -264,47 +263,49 @@ def _make_out_dict(
     day_field="day",
     shape_field="shape",
     region_field="neur_regions",
+    **kwargs,
 ):
     days = data[day_field]
     shapes = data[shape_field]
     regions = list(drf.iloc[0][0] for drf in data[region_field])
 
-    out_dict = {
-        (days[i], shapes[i], regions[i]): tuple(x[i] for x in out[0:1] + out[2:])
-        for i, dec in enumerate(out[0])
-    }
+    out_dict = {}
+    for i, dec in enumerate(out[0]):
+        key = (days[i], shapes[i], regions[i])
+        out_dict[key] = tuple(x[i] for x in out[0:1] + out[2:])
+    
     xs = out[1]
     out_full = (out_dict, xs)
     return out_full
 
 
 def cross_data_generalization(
-        data1,
-        masks1,
-        data2,
-        masks2,
-        *args,
-        ind_pairs=None,
-        params=None,
-        max_iter=1000,
-        model=skm.LinearSVC,
-        pre_pca=.99,
-        shuffle=False,
-        n_folds=100,
-        time_zero_field="stim_on",
-        region="IT",
-        flip=True,
-        **kwargs,
+    data1,
+    masks1,
+    data2,
+    masks2,
+    *args,
+    ind_pairs=None,
+    params=None,
+    max_iter=1000,
+    model=skm.LinearSVC,
+    pre_pca=0.99,
+    shuffle=False,
+    n_folds=100,
+    time_zero_field="stim_on",
+    region="IT",
+    flip=True,
+    **kwargs,
 ):
     if ind_pairs is None:
         ind_pairs = list(zip(range(len(masks1)), range(len(masks2))))
     if params is None:
-        params = {"class_weight": "balanced", "max_iter": max_iter, "dual": "auto"}
+        params = {"class_weight": "balanced", "max_iter": max_iter,}
 
     out1 = data1.get_dec_pops(
         *args,
         *masks1,
-        tzfs=(time_zero_field,)*2,
+        tzfs=(time_zero_field,) * 2,
         shuffle_trials=False,
         regions=(region,),
     )
@@ -315,7 +316,7 @@ def cross_data_generalization(
     out2 = data2.get_dec_pops(
         *args,
         *masks2,
-        tzfs=(time_zero_field,)*2,
+        tzfs=(time_zero_field,) * 2,
         shuffle_trials=False,
         regions=(region,),
     )
@@ -335,7 +336,7 @@ def cross_data_generalization(
         p12 = pops1_m2[ind1]
         p21 = pops2_m1[ind2]
         p22 = pops2_m2[ind2]
-        
+
         out = na.fold_skl(
             p11,
             p12,
@@ -377,7 +378,7 @@ def cross_data_generalization(
         out_dict["dec_flip"] = outs_flip
         out_dict["gen_flip"] = outs_gen_flip
     return out_dict
-    
+
 
 def decode_category_session_gen(
     data,
@@ -388,13 +389,13 @@ def decode_category_session_gen(
     params=None,
     max_iter=1000,
     model=skm.LinearSVC,
-    pre_pca=.99,
+    pre_pca=0.99,
     shuffle=False,
     session_offset=-1,
     n_folds=100,
     region="IT",
     **kwargs,
-):    
+):
     targs = data[cat_field]
     t1_mask = targs == 1
     t2_mask = targs == 2
@@ -406,7 +407,7 @@ def decode_category_session_gen(
         *args,
         t1_mask,
         t2_mask,
-        tzfs=(time_zero_field,)*2,
+        tzfs=(time_zero_field,) * 2,
         shuffle_trials=False,
         regions=(region,),
     )
@@ -415,7 +416,7 @@ def decode_category_session_gen(
     pops_t2 = np.array(pops_t2, dtype=object)[inds]
     pops_t1 = list(filter(lambda x: x.shape[0] > 0, pops_t1))
     pops_t2 = list(filter(lambda x: x.shape[0] > 0, pops_t2))
-    
+
     if params is None:
         params = {"class_weight": "balanced", "max_iter": max_iter, "dual": "auto"}
 
@@ -480,11 +481,11 @@ def decode_category(
 
 
 def decode_feature_values(
-        data,
-        *args,
-        feat_field="cat_proj",
-        time_zero_field="stim_on",
-        **kwargs,    
+    data,
+    *args,
+    feat_field="cat_proj",
+    time_zero_field="stim_on",
+    **kwargs,
 ):
     targ_feat = data[feat_field]
     mask = targ_feat.rs_isnan().rs_not()
@@ -510,20 +511,22 @@ def compute_var_ratio(data, func=np.std):
     return acat_var / cat_var
 
 
-
 def decode_cat_feature(*args, **kwargs):
     return decode_feature_values(*args, **kwargs, feat_field="cat_proj")
+
+
 def decode_anticat_feature(*args, **kwargs):
     return decode_feature_values(*args, **kwargs, feat_field="anticat_proj")
 
+
 def generalize_feature_values(
-        data,
-        *args,
-        feat_field="cat_proj",
-        gen_field="anticat_proj",
-        gap=0,
-        time_zero_field="stim_on",
-        **kwargs,            
+    data,
+    *args,
+    feat_field="cat_proj",
+    gen_field="anticat_proj",
+    gap=0,
+    time_zero_field="stim_on",
+    **kwargs,
 ):
     targ_feat = data[feat_field]
     mask = targ_feat.rs_isnan().rs_not()
@@ -545,10 +548,13 @@ def generalize_feature_values(
 
 def generalize_cat_feature(*args, **kwargs):
     return generalize_feature_values(*args, **kwargs)
+
+
 def generalize_anticat_feature(*args, **kwargs):
     return generalize_feature_values(
         *args, **kwargs, gen_field="cat_proj", feat_field="anticat_proj"
     )
+
 
 def decode_xor(
     data,
@@ -583,7 +589,7 @@ def decode_xor(
     d2_masks = []
     for i in range(data.n_sessions):
         proj = np.squeeze(
-            np.stack(stim_feats[i].to_numpy(), axis=0)/1000 @ boundary_vecs[i].T
+            np.stack(stim_feats[i].to_numpy(), axis=0) / 1000 @ boundary_vecs[i].T
         )
         p_min = np.min(proj, axis=0)
         p_max = np.max(proj, axis=0)
@@ -595,9 +601,8 @@ def decode_xor(
 
         d1_i = np.zeros(len(proj), dtype=bool)
         d2_i = np.zeros_like(d1_i)
-        for (xb_i, yb_i) in it.product(xb, yb):
-            group = np.logical_and(x_bins == xb_i,
-                                   y_bins == yb_i)
+        for xb_i, yb_i in it.product(xb, yb):
+            group = np.logical_and(x_bins == xb_i, y_bins == yb_i)
             if xb_i % 2 == yb_i % 2:
                 d1_i = np.logical_or(d1_i, group)
             else:
@@ -656,7 +661,9 @@ def generalize_category(
     g2_masks = []
     for i in range(data.n_sessions):
         proj = np.squeeze(
-            np.stack(stim_feats[i].to_numpy(), axis=0)/1000 @ boundary_vecs[i:i+1].T
+            np.stack(stim_feats[i].to_numpy(), axis=0)
+            / 1000
+            @ boundary_vecs[i : i + 1].T
         )
         pos_proj = proj > thr
         neg_proj = proj <= thr
