@@ -3,6 +3,7 @@ import itertools as it
 import numpy as np
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
+import pandas as pd
 
 import general.utility as u
 import general.neural_analysis as na
@@ -18,6 +19,166 @@ def stack_features(feats, ind=None, div=1000):
         stacked_feats = stacked_feats[0]
     return stacked_feats
 
+
+def _filter_and_categorize(
+        data,
+        *centroids,
+        sample_radius=100,
+        stim_feat_field="stim_feature_MAIN",
+):
+    masks = []
+    stim_feats = list(
+        np.stack(sf, axis=0) for sf in data[stim_feat_field]
+    )
+    for cent in centroids:
+        sub_masks = []
+        if len(cent.shape) == 1:
+            cent = np.expand_dims(cent, 0)
+        for sf in stim_feats:
+            m_sf = np.sqrt(np.sum((sf - cent)**2, axis=1)) < sample_radius
+            sub_masks.append(m_sf)
+        masks.append(sub_masks)
+    return masks
+
+
+def _parse_dates(dates):
+    dates = list(date[:-1] for date in dates)
+    out = pd.to_datetime(dates, yearfirst=True)
+    return out
+
+
+def compute_unit_dprime(
+        data,
+        *args,
+        cat_field="stim_sample_MAIN",
+        time_zero_field="stim_on",
+        day_field="day",
+        **kwargs,
+):
+    targs = data[cat_field]
+    t1_mask = targs == 1
+    t2_mask = targs == 2
+    xs, (pop1, pop2) = data.get_dec_pops(
+        *args,
+        t1_mask,
+        t2_mask,
+        tzfs=(time_zero_field, time_zero_field),
+        shuffle_trials=False,
+        **kwargs,
+    )
+    days = data[day_field]
+    dprimes = np.zeros((len(days), len(xs)))
+    for i, p1_i in enumerate(pop1):
+        p2_i = pop2[i]
+        if p1_i.shape[0] > 0:
+            mu1 = np.squeeze(np.mean(p1_i, axis=2))
+            sig1 = np.squeeze(np.std(p1_i, axis=2))
+            mu2 = np.squeeze(np.mean(p2_i, axis=2))
+            sig2 = np.squeeze(np.std(p2_i, axis=2))
+            dprimes[i] = np.nanmean(np.abs(mu1 - mu2) / np.sqrt(sig1*sig2), axis=0)
+        else:
+            dprimes[i] = np.nan
+    return xs, dprimes, days
+
+
+def compute_cross_shape_generalization(
+        pre_data,
+        post_data,
+        *args,
+        stim_feat_field="stim_feature_MAIN",
+        day_field="day",
+        cat_field="stim_sample_MAIN",
+        date_field="date",
+        sample_radius=300,
+        **kwargs,
+):
+    pre_dates = _parse_dates(pre_data[date_field])
+    post_dates = _parse_dates(post_data[date_field])
+    date_diff = post_dates[0] - pre_dates[-1]
+
+    pre_targ_diff = pre_dates[-1] - pre_dates - date_diff
+    pre_ind = np.argmin(np.abs(pre_targ_diff))
+    if pre_targ_diff[pre_ind].days > 0:
+        print(
+            "desired date difference is not exact, is {}".format(pre_targ_diff[pre_ind])
+        )
+    d1 = pre_dates[pre_ind]
+    d2 = pre_dates[-1]
+    pre_mask = np.logical_or(pre_dates == d1, pre_dates == d2)
+    data_pre = pre_data.session_mask(pre_mask)
+
+    post_targ_diff = post_dates[0] - post_dates + date_diff
+    post_ind = np.argmin(np.abs(post_targ_diff))
+    if post_targ_diff[post_ind].days > 0:
+        print(
+            "desired date difference is not exact, is {}".format(post_targ_diff[post_ind])
+        )
+    d1 = post_dates[0]
+    d2 = post_dates[post_ind]
+    post_mask = np.logical_or(post_dates == d1, post_dates == d2)
+    data_post = post_data.session_mask(post_mask)
+
+    # post data has most restricted set of points
+    cat1_mask = data_post[cat_field] == 1
+    cat1_stim = data_post.mask(cat1_mask)
+    c1_arr = np.stack(cat1_stim[stim_feat_field][0], axis=0)
+    cat1_average = np.mean(
+        c1_arr, axis=0,
+    )
+    
+    cat2_mask = data_post[cat_field] == 2
+    cat2_stim = data_post.mask(cat2_mask)
+    c2_arr = np.stack(cat2_stim[stim_feat_field][0], axis=0)
+    cat2_average = np.mean(
+        c2_arr, axis=0,
+    )
+
+    pre_dec_masks = _filter_and_categorize(
+        data_pre,
+        cat1_average,
+        cat2_average,
+        sample_radius=sample_radius,
+    )
+
+    post_dec_masks = _filter_and_categorize(
+        data_post,
+        cat1_average,
+        cat2_average,
+        sample_radius=sample_radius,
+    )
+    ind_pairs = (
+        (-1, 0), 
+    )
+    out_shape = cross_data_generalization(
+        data_pre,
+        pre_dec_masks,
+        data_post,
+        post_dec_masks,
+        *args,
+        ind_pairs=ind_pairs,
+        **kwargs,
+    )
+    ind_pairs = ((0, 1),)
+    out_session_pre = cross_data_generalization(
+        data_pre,
+        pre_dec_masks,
+        data_pre,
+        pre_dec_masks,
+        *args,
+        ind_pairs=ind_pairs,
+        **kwargs,
+    )
+    out_session_post = cross_data_generalization(
+        data_post,
+        post_dec_masks,
+        data_post,
+        post_dec_masks,
+        *args,
+        ind_pairs=ind_pairs,
+        **kwargs,
+    )
+    return out_shape, out_session_pre, out_session_post    
+    
 
 def estimate_nonlinear_decision_boundary(
     data,
@@ -117,6 +278,107 @@ def _make_out_dict(
     return out_full
 
 
+def cross_data_generalization(
+        data1,
+        masks1,
+        data2,
+        masks2,
+        *args,
+        ind_pairs=None,
+        params=None,
+        max_iter=1000,
+        model=skm.LinearSVC,
+        pre_pca=.99,
+        shuffle=False,
+        n_folds=100,
+        time_zero_field="stim_on",
+        region="IT",
+        flip=True,
+        **kwargs,
+):
+    if ind_pairs is None:
+        ind_pairs = list(zip(range(len(masks1)), range(len(masks2))))
+    if params is None:
+        params = {"class_weight": "balanced", "max_iter": max_iter, "dual": "auto"}
+
+    out1 = data1.get_dec_pops(
+        *args,
+        *masks1,
+        tzfs=(time_zero_field,)*2,
+        shuffle_trials=False,
+        regions=(region,),
+    )
+    xs, (pops1_m1, pops1_m2) = out1
+    pops1_m1 = list(filter(lambda x: x.shape[0] > 0, pops1_m1))
+    pops1_m2 = list(filter(lambda x: x.shape[0] > 0, pops1_m2))
+
+    out2 = data2.get_dec_pops(
+        *args,
+        *masks2,
+        tzfs=(time_zero_field,)*2,
+        shuffle_trials=False,
+        regions=(region,),
+    )
+    xs, (pops2_m1, pops2_m2) = out2
+    pops2_m1 = list(filter(lambda x: x.shape[0] > 0, pops2_m1))
+    pops2_m2 = list(filter(lambda x: x.shape[0] > 0, pops2_m2))
+
+    n_decs = len(ind_pairs)
+    outs = np.zeros((n_decs, n_folds, len(xs)))
+    outs_gen = np.zeros_like(outs)
+    if flip:
+        outs_flip = np.zeros_like(outs)
+        outs_gen_flip = np.zeros_like(outs)
+
+    for i, (ind1, ind2) in enumerate(ind_pairs):
+        p11 = pops1_m1[ind1]
+        p12 = pops1_m2[ind1]
+        p21 = pops2_m1[ind2]
+        p22 = pops2_m2[ind2]
+        
+        out = na.fold_skl(
+            p11,
+            p12,
+            n_folds,
+            model=model,
+            params=params,
+            pre_pca=pre_pca,
+            shuffle=shuffle,
+            gen_c1=p21,
+            gen_c2=p22,
+            mean=False,
+            **kwargs,
+        )
+        outs[i] = out["score"]
+        outs_gen[i] = out["score_gen"]
+        if flip:
+            out = na.fold_skl(
+                p21,
+                p22,
+                n_folds,
+                model=model,
+                params=params,
+                pre_pca=pre_pca,
+                shuffle=shuffle,
+                gen_c1=p11,
+                gen_c2=p12,
+                mean=False,
+                **kwargs,
+            )
+            outs_flip[i] = out["score"]
+            outs_gen_flip[i] = out["score_gen"]
+
+    out_dict = {
+        "dec": outs,
+        "xs": xs,
+        "gen": outs_gen,
+    }
+    if flip:
+        out_dict["dec_flip"] = outs_flip
+        out_dict["gen_flip"] = outs_gen_flip
+    return out_dict
+    
+
 def decode_category_session_gen(
     data,
     *args,
@@ -140,7 +402,7 @@ def decode_category_session_gen(
     days = np.array(data[order_key])
     inds = np.argsort(days)
     days = days[inds]
-    out = data._get_dec_pops(
+    out = data.get_dec_pops(
         *args,
         t1_mask,
         t2_mask,

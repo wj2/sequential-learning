@@ -30,8 +30,7 @@ class SequenceLearningFigure(pu.Figure):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, find_panel_keys=False, **kwargs)
 
-    def load_shape_data(self, shape="A6", max_files=np.inf, validate=True):
-        if self.data.get("exper_data") is None:
+    def only_load_shape_data(self, shape="A6", max_files=np.inf, validate=True):
             data = gio.Dataset.from_readfunc(
                 slaux.load_kiani_data_folder,
                 os.path.join(self.params.get("data_folder"), shape),
@@ -40,7 +39,18 @@ class SequenceLearningFigure(pu.Figure):
             )
             if validate:
                 data = slaux.filter_valid(data)
+            return data
+        
+    def load_shape_data(self, *args, **kwargs):
+        if self.data.get("exper_data") is None:
+            data = self.only_load_shape_data(*args, **kwargs)
             self.data["exper_data"] = data
+        return self.data["exper_data"]
+
+    def load_shape_groups(self):
+        if self.data.get("exper_data") is None:
+            data_dict = slaux.load_shape_list(self.shape_sequence)
+            self.data["exper_data"] = data_dict
         return self.data["exper_data"]
 
     @property
@@ -153,6 +163,143 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 0])
                 gpl.add_hlines(chance, axs[j, 1])
 
+
+class ShapeComparison(SequenceLearningFigure):
+    def __init__(
+            self,
+            shape_sequence,
+            fig_key="dec_sequence_figure",
+            colors=colors,
+            exper_data=None,
+            fwid=3,
+            **kwargs,
+    ):
+        
+        fsize = (fwid*(len(shape_sequence) - 1), fwid)
+
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.shape_sequence = shape_sequence
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+        super().__init__(fsize, params, colors=colors, **kwargs)
+        
+    def make_gss(self):
+        gss = {}
+        n_plots = len(self.shape_sequence) - 1
+        dec_grid = pu.make_mxn_gridspec(
+            self.gs, 1, n_plots, 0, 100, 0, 100, 2, 2
+        )
+        dec_ax = self.get_axs(
+            dec_grid, squeeze=True, sharex="all", sharey="all",
+        )
+        gss["panel_dec"] = dec_ax
+
+        self.gss = gss
+
+    def panel_dec(self, recompute=True):
+        key = "panel_dec"
+        axs = self.gss[key]
+
+        data_dict = self.load_shape_groups()
+        session_color = self.params.getcolor("session_color")
+        shape_color = self.params.getcolor("shape_color")
+
+        if self.data.get(key) is None or recompute:
+            gen_sequence = {}
+            for i, s2 in enumerate(self.shape_sequence[1:]):
+                s1 = self.shape_sequence[i]
+                out = sla.compute_cross_shape_generalization(
+                    data_dict[s1], data_dict[s2], 500, 0, 500, 500,
+                )
+                gen_sequence[(s1, s2)] = out
+            self.data[key] = gen_sequence
+        gen_sequence = self.data[key]
+        for i, ((s1, s2), gs_out) in enumerate(gen_sequence.items()):
+            slv.plot_cross_shape_generalization(
+                *gs_out, session_color=session_color, shape_color=shape_color, ax=axs[i]
+            )
+            axs[i].set_title("{} to {}".format(s1, s2))
+            gpl.clean_plot(axs[i], i)
+            
+
+
+
+class BehaviorSequenceSummary(SequenceLearningFigure):
+    def __init__(
+            self,
+            shape_sequence,
+            fig_key="bhv_sequence_figure",
+            colors=colors,
+            exper_data=None,
+            **kwargs,
+    ):
+        fsize = (16, 4)
+
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.shape_sequence = shape_sequence
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+        super().__init__(fsize, params, colors=colors, **kwargs)
+
+    def make_gss(self):
+        n_shapes = len(self.shape_sequence)
+
+        gss = {}
+        learning_grid = pu.make_mxn_gridspec(
+            self.gs, 1, n_shapes, 0, 50, 0, 100, 2, 5,
+        )
+        learning_ax = self.get_axs(
+            learning_grid, squeeze=True, sharey="all",
+        )
+        gss["panel_bhv"] = learning_ax.flatten()
+
+        
+        task_grid = pu.make_mxn_gridspec(
+            self.gs, 1, 2*n_shapes, 55, 100, 0, 100, 2, 2,
+        )
+        task_axs = self.get_axs(
+            task_grid, squeeze=True, sharex="all", sharey="all",
+        )
+        gss["panel_tasks"] = np.reshape(task_axs, (-1, 2))
+
+        self.gss = gss
+
+    def panel_bhv(self):
+        key = "panel_bhv"
+        axs = self.gss[key]
+        data_dict = self.load_shape_groups()
+        
+        for i, (k, data_k) in enumerate(data_dict.items()):
+            slv.plot_session_average(data_k, ax=axs[i])
+            axs[i].set_title(k)
+            gpl.clean_plot(axs[i], i)
+
+    def panel_tasks(self):
+        key = "panel_tasks"
+        axs = self.gss[key]
+
+        data_dict = self.load_shape_groups()
+
+        for i, (k, data_k) in enumerate(data_dict.items()):
+            slv.plot_sampled_stimuli(
+                data_k, ind=0, stim_cat_field="chosen_cat", ax=axs[i, 0],
+            )
+            slv.plot_sampled_stimuli(
+                data_k, ind=-1, stim_cat_field="chosen_cat", ax=axs[i, 1],
+            )
+        
 
 class ShapeSpaceSummary(SequenceLearningFigure):
     def __init__(

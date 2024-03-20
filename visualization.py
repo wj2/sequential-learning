@@ -4,19 +4,62 @@ import numpy as np
 import itertools as it
 
 import general.plotting as gpl
+import general.utility as u
 import sequential_learning.analysis as sla
 
 
+def plot_session_change(
+        xs, metric, days, data, cm="Blues", var_thr=.6, axs=None, fwid=2, t_cent=250,
+):
+    cm = plt.get_cmap(cm)
+    mask = sla.compute_var_ratio(data) > var_thr
+    metric = metric[mask]
+    days = days[mask]
+    colors = cm(np.linspace(.2, 1, len(metric)))
+
+    if axs is None:
+        f, axs = plt.subplots(1, 2, figsize=(fwid*2, fwid))
+    ax1, ax2 = axs
+    t_ind = np.argmin(np.abs(xs - t_cent))
+
+    for i, metric_i in enumerate(metric):
+        gpl.plot_trace_werr(xs, metric_i, ax=ax1, color=colors[i])
+        ax2.plot(days[i], metric_i[t_ind], "o", color=colors[i])    
+        gpl.clean_plot(ax2, 0)    
+
+
+@gpl.ax_adder
+def plot_session_average(
+        data,
+        ax=None,
+        fwid=1,
+        cho_field="chosen_cat",
+        targ_field="stim_sample_MAIN",        
+        day_field="day",
+        n_boots=500,
+):
+    days = data[day_field]
+    days, inds = np.unique(days, return_index=True)
+    choices = data[cho_field]
+    targets = data[targ_field]
+    corr = np.zeros((n_boots, len(days)))
+    for i, ind in enumerate(inds):
+        perf = choices[ind].to_numpy() == targets[ind].to_numpy()
+        corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
+    gpl.plot_trace_werr(days, corr, ax=ax, conf95=True)
+    gpl.add_hlines(.5, ax)
+    
+
 def plot_performance(
-    data,
-    ax=None,
-    cho_field="targ_cho",
-    targ_field="targ_cor",
-    trl_field="trial",
-    day_field="days",
-    color_gap=.2,
-    cm="Blues",
-    **kwargs
+        data,
+        ax=None,
+        cho_field="chosen_cat",
+        targ_field="stim_sample_MAIN",
+        trl_field="trial",
+        day_field="day",
+        color_gap=.2,
+        cm="Blues",
+        **kwargs
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
@@ -29,10 +72,49 @@ def plot_performance(
     cols = cm(np.linspace(color_gap, 1 - color_gap, len(trl_groups)))
     for i, cg in enumerate(corr_groups):
         trls = trl_groups[i].to_numpy(float)
+        trls[trls > 5000] = np.nan
         col_i = cols[inds[i]]
 
         gpl.plot_scatter_average(trls, cg.to_numpy(float), **kwargs, ax=ax, color=col_i)
     return ax
+
+
+@gpl.ax_adder
+def plot_cross_shape_generalization(
+        shape,
+        pre_session,
+        post_session,
+        ax=None,
+        fwid=1,
+        shape_color=None,
+        session_color=None,
+        gen_tick=.2,
+        t_ind=0,
+        key_pairs=(("dec", "gen"), ("dec_flip", "gen_flip")),
+        markers=("o", "s"),
+):
+    out_list = (pre_session, shape, post_session)
+    colors = (session_color, shape_color, session_color)
+    for i, ol in enumerate(out_list):
+        xs = [i - gen_tick / 2, i + gen_tick / 2]
+        for j, (k1, k2) in enumerate(key_pairs):
+            pts_k1 = ol[k1][..., t_ind]
+            pts_k2 = ol[k2][..., t_ind]
+            pts = np.stack((pts_k1, pts_k2), axis=-1)
+            for pt in pts:
+                gpl.plot_trace_werr(
+                    xs,
+                    pt,
+                    ax=ax,
+                    points=True,
+                    confstd=True,
+                    color=colors[i],
+                    fill=False,
+                    marker=markers[j],
+                )
+    ax.set_xticks([0, 1, 2])
+    ax.set_xticklabels(["pre", "shape", "post"])
+    gpl.add_hlines(.5, ax)
 
 
 def plot_eg_neurons(pop, xs, axs=None, fwid=1):

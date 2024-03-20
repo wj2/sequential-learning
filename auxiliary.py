@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 import general.utility as u
+import general.data_io as gio
 
 
 BASEFOLDER = "../data/sequential_learning/data/"
@@ -17,7 +18,7 @@ ft1 = (
     "\-d(?P<day>[0-9]+)\.[0-9]+\.FIRA\.mat"
 )
 ft2 = (
-    "A(?P<date>[0-9a-z]+)\.(?P<shape>A[0-9])\-d(?P<day>[0-9]+)\.FIRA\.LMAN_"
+    "A(?P<date>[0-9a-z]+)\.(?P<shape>A[0-9])\-d(?P<day>[0-9]+)(\.postA[0-9]+)?\.FIRA\.LMAN_"
     "cat\.(?P<region>[A-Z0-9+]+)\.mat"
 )
 file_templates = (ft1, ft2)
@@ -29,6 +30,29 @@ default_type_dict = {
 
 
 stim_temp = "(?P<lv1>-?[0-9]+)_(?P<lv2>-?[0-9]+)_stim\.png"
+
+
+
+def load_shape_list(
+        shapes,
+        data_folder=BASEFOLDER,
+        sort_by="day",
+        max_files=np.inf,
+        exclude_invalid=True,
+        **kwargs
+):
+    out_data = {}
+    for shape in shapes:
+        data = gio.Dataset.from_readfunc(
+            load_kiani_data_folder, 
+            os.path.join(data_folder, shape), 
+            max_files=max_files, 
+            sort_by=sort_by,
+        )
+        if exclude_invalid:
+            data = filter_valid(data)
+        out_data[shape] = data
+    return out_data    
 
 
 def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?"):
@@ -194,4 +218,5 @@ def filter_valid(
     mask4 = list(list(
         u.check_list(x) and len(x) == 2 for x in sfm) for sfm in data[feat_key]
     )
-    return data.mask(mask1.rs_and(mask2).rs_and(mask3).rs_and(mask4))
+    full_mask = mask1.rs_and(mask2).rs_and(mask3).rs_and(mask4)
+    return data.mask(full_mask)
