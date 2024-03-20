@@ -2,6 +2,7 @@ import argparse
 import pickle
 from datetime import datetime
 import matplotlib.pyplot as plt
+import os
 
 import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
@@ -13,7 +14,7 @@ def create_parser():
         description="perform decoding analyses on Kiani data"
     )
     parser.add_argument("--data_folder", default=slaux.BASEFOLDER)
-    out_template = "summary_{shape}_{jobid}"
+    out_template = "transition_{shape}_{jobid}"
     parser.add_argument(
         "-o",
         "--output_template",
@@ -23,7 +24,7 @@ def create_parser():
     )
     parser.add_argument(
         "--output_folder",
-        default="../results/sequential_learning/summary_figs/",
+        default="../results/sequential_learning/transition/",
         type=str,
         help="folder to save the output in",
     )
@@ -66,7 +67,7 @@ if __name__ == "__main__":
 
     data_dict = slaux.load_shape_list((s1, s2))
 
-    shape_str = "{}_{}".format(s1, s2)
+    shape_str = "{}-{}".format(s1, s2)
     out = sla.compute_cross_shape_generalization(
         data_dict[s1],
         data_dict[s2],
@@ -87,5 +88,6 @@ if __name__ == "__main__":
     )
 
     fname = args.output_template.format(shape=shape_str, jobid=args.jobid)
-    f.savefig(fname + ".pdf", bbox_inches="tight", transparent=True)
-    pickle.dump(out, open(fname + ".pkl", "wb"))
+    fpath = os.path.join(args.output_folder, fname)
+    f.savefig(fpath + ".pdf", bbox_inches="tight", transparent=True)
+    pickle.dump(out, open(fpath + ".pkl", "wb"))
