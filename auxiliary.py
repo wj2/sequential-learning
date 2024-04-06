@@ -13,22 +13,31 @@ BASEFOLDER = "../data/sequential_learning/data/"
 
 
 ft1 = (
-    "A(?P<date>[0-9a-z]+)\.(?P<region>[A-Z0-9+]+)\.learn(?P<shape>A[0-9])"
-    "\-d(?P<day>[0-9]+)\.[0-9]+\.FIRA\.mat"
+    "A(?P<date>[0-9a-z]+)\\.(?P<region>[A-Z0-9+]+)\\.learn(?P<shape>A[0-9])"
+    "\\-d(?P<day>[0-9]+)\\.[0-9]+\\.FIRA\\.mat"
 )
 ft2 = (
-    "A(?P<date>[0-9a-z]+)\.(?P<shape>A[0-9])\-d(?P<day>[0-9]+)(\.postA[0-9]+)?\.FIRA\.LMAN_"
-    "cat\.(?P<region>[A-Z0-9+]+)\.mat"
+    "A(?P<date>[0-9a-z]+)\\.(?P<shape>A[0-9])\\-d(?P<day>[0-9]+)(\\.postA[0-9]+)?"
+    "\\.FIRA\\.LMAN_"
+    "cat\\.(?P<region>[A-Z0-9+]+)\\.mat"
 )
 file_templates = (ft1, ft2)
 
 default_type_dict = {
-    "time": np.float,
-    "value": np.float,
+    "time": float,
+    "value": float,
 }
 
 
-stim_temp = "(?P<lv1>-?[0-9]+)_(?P<lv2>-?[0-9]+)_stim\.png"
+stim_temp = "(?P<lv1>-?[0-9]+)_(?P<lv2>-?[0-9]+)_stim\\.png"
+
+
+sequence_groups = {
+    "A3-A4": ("A3", "A4", "A3postA4"),
+    "A4-A5": ("A4", "A5", "A4postA5"),
+    "A5-A6": ("A5", "A6", "A5postA6"),
+    "A6-A7": ("A6", "A7", "A6postA7"),
+}
 
 
 def load_shape_list(

@@ -28,7 +28,28 @@ def plot_session_change(
         gpl.clean_plot(ax2, 0)    
 
 
-@gpl.ax_adder
+@gpl.ax_adder()
+def plot_related_unrelated_performance(
+        data_seq,
+        ax=None,
+        cat_field="cat_def_MAIN",
+        related_color="r",
+        unrelated_color="g",
+        **kwargs,
+):
+    cats = []
+    for k, data in data_seq.items():
+        cat_bound = data[cat_field][0].iloc[0]
+        print(cat_bound, cats)
+        if cat_bound in cats:
+            color = related_color
+        else:
+            color = unrelated_color
+        cats.append(cat_bound)
+        plot_session_average(data, ax=ax, color=color, **kwargs)
+    
+
+@gpl.ax_adder()
 def plot_session_average(
         data,
         ax=None,
@@ -37,6 +58,7 @@ def plot_session_average(
         targ_field="stim_sample_MAIN",        
         day_field="day",
         n_boots=500,
+        **kwargs,
 ):
     days = data[day_field]
     days, inds = np.unique(days, return_index=True)
@@ -46,7 +68,7 @@ def plot_session_average(
     for i, ind in enumerate(inds):
         perf = choices[ind].to_numpy() == targets[ind].to_numpy()
         corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
-    gpl.plot_trace_werr(days, corr, ax=ax, conf95=True)
+    gpl.plot_trace_werr(days, corr, ax=ax, conf95=True, **kwargs)
     gpl.add_hlines(.5, ax)
     
 
