@@ -14,7 +14,7 @@ def create_parser():
         description="perform decoding analyses on Kiani data"
     )
     parser.add_argument("--data_folder", default=slaux.BASEFOLDER)
-    out_template = "transition_full_{shape}_{jobid}"
+    out_template = "transition_full_{boundary}_{shape}_{jobid}"
     parser.add_argument(
         "-o",
         "--output_template",
@@ -61,8 +61,10 @@ if __name__ == "__main__":
         mask_s2, mask_s1 = slaux.get_binary_feature_masks(
             data_dict[s2], data_dict[s1], feat_ind=args.use_binary_feature
         )
+        boundary = "feat-{}".format(args.use_binary_feature)
     else:
         mask_s2, mask_s1 = slaux.get_prototype_masks(data_dict[s2], data_dict[s1])
+        boundary = "proto-{}".format(s2)
     out = sla.cross_session_generalization(
         (data_dict[s1], mask_s1),
         (data_dict[s2], mask_s2),
@@ -74,7 +76,9 @@ if __name__ == "__main__":
     )
 
     shape_str = "{}-{}".format(s1, s2)
-    fn = args.output_template.format(shape=shape_str, jobid=args.jobid)
+    fn = args.output_template.format(
+        shape=shape_str, jobid=args.jobid, boundary=boundary
+    )
     path = os.path.join(args.output_folder, fn)
     out_dict = {"args": vars(args), "gen": out}
     pickle.dump(out_dict, open(path + ".pkl", "wb"))
