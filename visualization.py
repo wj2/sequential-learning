@@ -452,7 +452,7 @@ def plot_decoder_autocorrelation(
     ax=None,
     within_shape_color="g",
     across_shape_color="r",
-    t_targ=150,
+    t_targ=250,
     chance=0.5,
 ):
     t_ind = np.argmin(np.abs(xs - t_targ))
