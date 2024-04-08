@@ -1,4 +1,3 @@
-
 import os
 import numpy as np
 
@@ -31,16 +30,16 @@ class SequenceLearningFigure(pu.Figure):
         super().__init__(*args, find_panel_keys=False, **kwargs)
 
     def only_load_shape_data(self, shape="A6", max_files=np.inf, validate=True):
-            data = gio.Dataset.from_readfunc(
-                slaux.load_kiani_data_folder,
-                os.path.join(self.params.get("data_folder"), shape),
-                max_files=max_files,
-                sort_by="day",
-            )
-            if validate:
-                data = slaux.filter_valid(data)
-            return data
-        
+        data = gio.Dataset.from_readfunc(
+            slaux.load_kiani_data_folder,
+            os.path.join(self.params.get("data_folder"), shape),
+            max_files=max_files,
+            sort_by="day",
+        )
+        if validate:
+            data = slaux.filter_valid(data)
+        return data
+
     def load_shape_data(self, *args, **kwargs):
         if self.data.get("exper_data") is None:
             data = self.only_load_shape_data(*args, **kwargs)
@@ -56,9 +55,7 @@ class SequenceLearningFigure(pu.Figure):
     @property
     def color_dict(self):
         regions = self.params.getlist("use_regions")
-        color_dict = {
-            r: self.params.getcolor("{}_color".format(r)) for r in regions
-        }
+        color_dict = {r: self.params.getcolor("{}_color".format(r)) for r in regions}
         return color_dict
 
     @property
@@ -70,20 +67,18 @@ class SequenceLearningFigure(pu.Figure):
     @property
     def cm_dict(self):
         regions = self.params.getlist("use_regions")
-        color_dict = {
-            r: self.params.get("{}_cm".format(r)) for r in regions
-        }
+        color_dict = {r: self.params.get("{}_cm".format(r)) for r in regions}
         return color_dict
-    
+
     def _generic_decoding(
-            self,
-            key,
-            func_and_name,
-            plot_gen=None,
-            chance=.5,
-            recompute=False,
-            inset=False,
-            scatter_bound=(-.75, .75),
+        self,
+        key,
+        func_and_name,
+        plot_gen=None,
+        chance=0.5,
+        recompute=False,
+        inset=False,
+        scatter_bound=(-0.75, 0.75),
     ):
         if plot_gen is None:
             plot_gen = {}
@@ -98,6 +93,7 @@ class SequenceLearningFigure(pu.Figure):
         tbeg = self.params.getint("tbeg")
         tend = self.params.getint("tend")
         step = self.params.getint("winstep")
+        uniform_resample = self.params.getboolean("uniform_resample")
         if self.data.get(key) is None or recompute:
             data = self.load_shape_data()
             var_ratio = sla.compute_var_ratio(data)
@@ -105,11 +101,12 @@ class SequenceLearningFigure(pu.Figure):
             outs = {}
             for r in regions:
                 args = (data_session, winsize, tbeg, tend, step)
-                kwargs_stim = {"regions": (r,)}
-                kwargs_sacc = {"regions": (r,), "time_zero_field": "fp_off"}
+                kwargs_both = {"regions": (r,), "uniform_resample": uniform_resample}
+                kwargs_stim = {}
+                kwargs_sacc = {"time_zero_field": "fp_off"}
                 for k, func in func_and_name.items():
-                    out_stim = func(*args, **kwargs_stim)
-                    out_sacc = func(*args, **kwargs_sacc)
+                    out_stim = func(*args, **kwargs_stim, **kwargs_both)
+                    out_sacc = func(*args, **kwargs_sacc, **kwargs_both)
                     store = outs.get(k, {})
                     store[r] = (out_stim, out_sacc)
                     outs[k] = store
@@ -141,7 +138,7 @@ class SequenceLearningFigure(pu.Figure):
                         plot_gen=plot_gen.get(k, False),
                         x_range=scatter_bound,
                         y_range=scatter_bound,
-                        ms=.1,
+                        ms=0.1,
                     )
                     slv.plot_decoding_scatter(
                         *out_ij[r][1],
@@ -150,7 +147,7 @@ class SequenceLearningFigure(pu.Figure):
                         plot_gen=plot_gen.get(k, False),
                         x_range=scatter_bound,
                         y_range=scatter_bound,
-                        ms=.1,
+                        ms=0.1,
                     )
                 axs[j, 0].set_ylabel(k)
                 if j < len(outs_all) - 1:
@@ -166,16 +163,15 @@ class SequenceLearningFigure(pu.Figure):
 
 class ShapeComparison(SequenceLearningFigure):
     def __init__(
-            self,
-            shape_sequence,
-            fig_key="dec_sequence_figure",
-            colors=colors,
-            exper_data=None,
-            fwid=3,
-            **kwargs,
+        self,
+        shape_sequence,
+        fig_key="dec_sequence_figure",
+        colors=colors,
+        exper_data=None,
+        fwid=3,
+        **kwargs,
     ):
-        
-        fsize = (fwid*(len(shape_sequence) - 1), fwid)
+        fsize = (fwid * (len(shape_sequence) - 1), fwid)
 
         cf = u.ConfigParserColor()
         cf.read(config_path)
@@ -188,15 +184,16 @@ class ShapeComparison(SequenceLearningFigure):
             data.update(add_data)
             kwargs["data"] = data
         super().__init__(fsize, params, colors=colors, **kwargs)
-        
+
     def make_gss(self):
         gss = {}
         n_plots = len(self.shape_sequence) - 1
-        dec_grid = pu.make_mxn_gridspec(
-            self.gs, 1, n_plots, 0, 100, 0, 100, 2, 2
-        )
+        dec_grid = pu.make_mxn_gridspec(self.gs, 1, n_plots, 0, 100, 0, 100, 2, 2)
         dec_ax = self.get_axs(
-            dec_grid, squeeze=True, sharex="all", sharey="all",
+            dec_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
         gss["panel_dec"] = dec_ax
 
@@ -215,7 +212,12 @@ class ShapeComparison(SequenceLearningFigure):
             for i, s2 in enumerate(self.shape_sequence[1:]):
                 s1 = self.shape_sequence[i]
                 out = sla.compute_cross_shape_generalization(
-                    data_dict[s1], data_dict[s2], 500, 0, 500, 500,
+                    data_dict[s1],
+                    data_dict[s2],
+                    500,
+                    0,
+                    500,
+                    500,
                 )
                 gen_sequence[(s1, s2)] = out
             self.data[key] = gen_sequence
@@ -226,18 +228,16 @@ class ShapeComparison(SequenceLearningFigure):
             )
             axs[i].set_title("{} to {}".format(s1, s2))
             gpl.clean_plot(axs[i], i)
-            
-
 
 
 class BehaviorSequenceSummary(SequenceLearningFigure):
     def __init__(
-            self,
-            shape_sequence,
-            fig_key="bhv_sequence_figure",
-            colors=colors,
-            exper_data=None,
-            **kwargs,
+        self,
+        shape_sequence,
+        fig_key="bhv_sequence_figure",
+        colors=colors,
+        exper_data=None,
+        **kwargs,
     ):
         fsize = (16, 4)
 
@@ -258,19 +258,39 @@ class BehaviorSequenceSummary(SequenceLearningFigure):
 
         gss = {}
         learning_grid = pu.make_mxn_gridspec(
-            self.gs, 1, n_shapes, 0, 50, 0, 100, 2, 5,
+            self.gs,
+            1,
+            n_shapes,
+            0,
+            50,
+            0,
+            100,
+            2,
+            5,
         )
         learning_ax = self.get_axs(
-            learning_grid, squeeze=True, sharey="all",
+            learning_grid,
+            squeeze=True,
+            sharey="all",
         )
         gss["panel_bhv"] = learning_ax.flatten()
 
-        
         task_grid = pu.make_mxn_gridspec(
-            self.gs, 1, 2*n_shapes, 55, 100, 0, 100, 2, 2,
+            self.gs,
+            1,
+            2 * n_shapes,
+            55,
+            100,
+            0,
+            100,
+            2,
+            2,
         )
         task_axs = self.get_axs(
-            task_grid, squeeze=True, sharex="all", sharey="all",
+            task_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
         gss["panel_tasks"] = np.reshape(task_axs, (-1, 2))
 
@@ -280,7 +300,7 @@ class BehaviorSequenceSummary(SequenceLearningFigure):
         key = "panel_bhv"
         axs = self.gss[key]
         data_dict = self.load_shape_groups()
-        
+
         for i, (k, data_k) in enumerate(data_dict.items()):
             slv.plot_session_average(data_k, ax=axs[i])
             axs[i].set_title(k)
@@ -294,21 +314,27 @@ class BehaviorSequenceSummary(SequenceLearningFigure):
 
         for i, (k, data_k) in enumerate(data_dict.items()):
             slv.plot_sampled_stimuli(
-                data_k, ind=0, stim_cat_field="chosen_cat", ax=axs[i, 0],
+                data_k,
+                ind=0,
+                stim_cat_field="chosen_cat",
+                ax=axs[i, 0],
             )
             slv.plot_sampled_stimuli(
-                data_k, ind=-1, stim_cat_field="chosen_cat", ax=axs[i, 1],
+                data_k,
+                ind=-1,
+                stim_cat_field="chosen_cat",
+                ax=axs[i, 1],
             )
-        
+
 
 class ShapeSpaceSummary(SequenceLearningFigure):
     def __init__(
-            self,
-            shape_string,
-            fig_key="dec_figure",
-            colors=colors,
-            exper_data=None,
-            **kwargs,
+        self,
+        shape_string,
+        fig_key="dec_figure",
+        colors=colors,
+        exper_data=None,
+        **kwargs,
     ):
         fsize = (16, 12)
 
@@ -317,16 +343,13 @@ class ShapeSpaceSummary(SequenceLearningFigure):
         params = cf[fig_key]
         self.fig_key = fig_key
         self.shape = shape_string
-        self.panel_keys = (
-            "panel_decoding",
-        )
+        self.panel_keys = ("panel_decoding",)
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
             data = kwargs.get("data", {})
             data.update(add_data)
             kwargs["data"] = data
         super().__init__(fsize, params, colors=colors, **kwargs)
-
 
     def make_gss(self):
         data = self.load_shape_data(self.shape)
@@ -336,19 +359,31 @@ class ShapeSpaceSummary(SequenceLearningFigure):
         n_plot = int(np.ceil(np.sqrt(n_pts)))
 
         gss = {}
-        task_grid = pu.make_mxn_gridspec(
-            self.gs, n_plot, n_plot, 0, 100, 0, 60, 2, 2
-        )
+        task_grid = pu.make_mxn_gridspec(self.gs, n_plot, n_plot, 0, 100, 0, 60, 2, 2)
         task_ax = self.get_axs(
-            task_grid, squeeze=True, sharex="all", sharey="all",
+            task_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
         gss["panel_bhv"] = task_ax.flatten()
 
         dec_grid = pu.make_mxn_gridspec(
-            self.gs, 5, 2, 0, 100, 70, 100, 5, 4,
+            self.gs,
+            5,
+            2,
+            0,
+            100,
+            70,
+            100,
+            5,
+            4,
         )
         dec_axs = self.get_axs(
-            dec_grid, squeeze=True, sharex="all", sharey="all",
+            dec_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
         gss["panel_decoding"] = dec_axs
 
@@ -368,7 +403,7 @@ class ShapeSpaceSummary(SequenceLearningFigure):
                 ax=axs[i],
                 color1=r1c,
                 color2=r2c,
-                stim_cat_field="chosen_cat", 
+                stim_cat_field="chosen_cat",
             )
 
     def panel_decoding(self):
@@ -384,10 +419,10 @@ class ShapeSpaceSummary(SequenceLearningFigure):
             "generalization": True,
             "non-category generalization": True,
         }
-        chance = .5
+        chance = 0.5
         self._generic_decoding(key, func_and_name, chance=chance, plot_gen=plot_gen)
 
-                
+
 class ContinuousDecodingFigure(SequenceLearningFigure):
     def __init__(self, fig_key="dec_figure", colors=colors, **kwargs):
         fsize = (4.5, 8)
@@ -396,22 +431,21 @@ class ContinuousDecodingFigure(SequenceLearningFigure):
         cf.read(config_path)
         params = cf[fig_key]
         self.fig_key = fig_key
-        self.panel_keys = (
-            "panel_decoding",
-        )
+        self.panel_keys = ("panel_decoding",)
         super().__init__(fsize, params, colors=colors, **kwargs)
 
     def make_gss(self):
         gss = {}
-        dec_grid = pu.make_mxn_gridspec(
-            self.gs, 4, 2, 0, 100, 0, 100, 10, 5
-        )
+        dec_grid = pu.make_mxn_gridspec(self.gs, 4, 2, 0, 100, 0, 100, 10, 5)
         dec_main_ax = self.get_axs(
-            dec_grid, squeeze=True, sharex="all", sharey="all",
+            dec_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
         dec_inset_axs = np.zeros_like(dec_main_ax)
-        bounds = (.5, .5, .5, .5)
-        for (i, j) in u.make_array_ind_iterator(dec_main_ax.shape):
+        bounds = (0.5, 0.5, 0.5, 0.5)
+        for i, j in u.make_array_ind_iterator(dec_main_ax.shape):
             ax = dec_main_ax[i, j]
             ax_ins = ax.inset_axes(bounds)
             dec_inset_axs[i, j] = ax_ins
@@ -434,7 +468,12 @@ class ContinuousDecodingFigure(SequenceLearningFigure):
         }
         chance = 0
         self._generic_decoding(
-            key, func_and_name, plot_gen, chance=chance, recompute=recompute, inset=True,
+            key,
+            func_and_name,
+            plot_gen,
+            chance=chance,
+            recompute=recompute,
+            inset=True,
         )
 
 
@@ -446,19 +485,18 @@ class DecodingFigure(SequenceLearningFigure):
         cf.read(config_path)
         params = cf[fig_key]
         self.fig_key = fig_key
-        self.panel_keys = (
-            "panel_decoding",
-        )
+        self.panel_keys = ("panel_decoding",)
         super().__init__(fsize, params, colors=colors, **kwargs)
 
     def make_gss(self):
         gss = {}
-        dec_grid = pu.make_mxn_gridspec(
-            self.gs, 5, 2, 0, 100, 0, 100, 10, 5
-        )
+        dec_grid = pu.make_mxn_gridspec(self.gs, 5, 2, 0, 100, 0, 100, 10, 5)
 
         gss["panel_decoding"] = self.get_axs(
-            dec_grid, squeeze=True, sharex="all", sharey="all",
+            dec_grid,
+            squeeze=True,
+            sharex="all",
+            sharey="all",
         )
 
         self.gss = gss
@@ -476,7 +514,7 @@ class DecodingFigure(SequenceLearningFigure):
             "generalization": True,
             "non-category generalization": True,
         }
-        chance = .5
+        chance = 0.5
         self._generic_decoding(
             key, func_and_name, plot_gen, chance=chance, recompute=recompute
         )

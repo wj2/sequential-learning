@@ -4,6 +4,8 @@ import skimage.io as skio
 import re
 import numpy as np
 import pandas as pd
+import scipy.stats as sts
+import sklearn.model_selection as skms
 
 import general.utility as u
 import general.data_io as gio
@@ -46,7 +48,7 @@ def load_shape_list(
     sort_by="day",
     max_files=np.inf,
     exclude_invalid=True,
-    **kwargs
+    **kwargs,
 ):
     out_data = {}
     for shape in shapes:
@@ -60,6 +62,48 @@ def load_shape_list(
             data = filter_valid(data)
         out_data[shape] = data
     return out_data
+
+
+def sample_uniform_mask(
+    data,
+    cat_proj="cat_proj",
+    anticat_proj="anticat_proj",
+    proj_range=None,
+    n_bins=5,
+    eps=1e-10,
+):
+    cats = data[cat_proj]
+    anti_cats = data[anticat_proj]
+    if proj_range is None:
+        p_end = np.max(list(np.max(np.abs(x)) for x in cats))
+        p_end = np.min([.71, p_end])
+        proj_range = (-p_end - eps, p_end + eps)
+    edges = (np.linspace(*proj_range, n_bins + 1),) * 2
+    masks = []
+    for i, cat_i in enumerate(cats):
+        anti_cat_i = anti_cats[i]
+        sample_pos = np.stack((cat_i, anti_cat_i), axis=1)
+
+        counts, edges, binnumber = sts.binned_statistic_dd(
+            sample_pos,
+            np.ones(len(sample_pos)),
+            statistic="count",
+            bins=edges,
+        )
+        _, counts = np.unique(binnumber, return_counts=True)
+        trl_samps = np.min(counts)
+        
+        if trl_samps > 1:
+            splitter = skms.StratifiedShuffleSplit(
+                n_splits=1,
+                train_size=int(trl_samps) * n_bins**2,
+            )
+            samp_inds, _ = list(splitter.split(sample_pos, binnumber))[0]
+        else:
+            samp_inds = []
+        mask_i = np.isin(np.arange(len(cat_i)), samp_inds)
+        masks.append(mask_i)
+    return masks
 
 
 def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?"):

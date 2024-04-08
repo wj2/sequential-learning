@@ -1,4 +1,3 @@
-
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools as it
@@ -9,33 +8,41 @@ import sequential_learning.analysis as sla
 
 
 def plot_session_change(
-        xs, metric, days, data, cm="Blues", var_thr=.6, axs=None, fwid=2, t_cent=250,
+    xs,
+    metric,
+    days,
+    data,
+    cm="Blues",
+    var_thr=0.6,
+    axs=None,
+    fwid=2,
+    t_cent=250,
 ):
     cm = plt.get_cmap(cm)
     mask = sla.compute_var_ratio(data) > var_thr
     metric = metric[mask]
     days = days[mask]
-    colors = cm(np.linspace(.2, 1, len(metric)))
+    colors = cm(np.linspace(0.2, 1, len(metric)))
 
     if axs is None:
-        f, axs = plt.subplots(1, 2, figsize=(fwid*2, fwid))
+        f, axs = plt.subplots(1, 2, figsize=(fwid * 2, fwid))
     ax1, ax2 = axs
     t_ind = np.argmin(np.abs(xs - t_cent))
 
     for i, metric_i in enumerate(metric):
         gpl.plot_trace_werr(xs, metric_i, ax=ax1, color=colors[i])
-        ax2.plot(days[i], metric_i[t_ind], "o", color=colors[i])    
-        gpl.clean_plot(ax2, 0)    
+        ax2.plot(days[i], metric_i[t_ind], "o", color=colors[i])
+        gpl.clean_plot(ax2, 0)
 
 
 @gpl.ax_adder()
 def plot_related_unrelated_performance(
-        data_seq,
-        ax=None,
-        cat_field="cat_def_MAIN",
-        related_color="r",
-        unrelated_color="g",
-        **kwargs,
+    data_seq,
+    ax=None,
+    cat_field="cat_def_MAIN",
+    related_color="r",
+    unrelated_color="g",
+    **kwargs,
 ):
     cats = []
     for k, data in data_seq.items():
@@ -47,18 +54,18 @@ def plot_related_unrelated_performance(
             color = unrelated_color
         cats.append(cat_bound)
         plot_session_average(data, ax=ax, color=color, **kwargs)
-    
+
 
 @gpl.ax_adder()
 def plot_session_average(
-        data,
-        ax=None,
-        fwid=1,
-        cho_field="chosen_cat",
-        targ_field="stim_sample_MAIN",        
-        day_field="day",
-        n_boots=500,
-        **kwargs,
+    data,
+    ax=None,
+    fwid=1,
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    day_field="day",
+    n_boots=500,
+    **kwargs,
 ):
     days = data[day_field]
     days, inds = np.unique(days, return_index=True)
@@ -69,19 +76,19 @@ def plot_session_average(
         perf = choices[ind].to_numpy() == targets[ind].to_numpy()
         corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
     gpl.plot_trace_werr(days, corr, ax=ax, conf95=True, **kwargs)
-    gpl.add_hlines(.5, ax)
-    
+    gpl.add_hlines(0.5, ax)
+
 
 def plot_performance(
-        data,
-        ax=None,
-        cho_field="chosen_cat",
-        targ_field="stim_sample_MAIN",
-        trl_field="trial",
-        day_field="day",
-        color_gap=.2,
-        cm="Blues",
-        **kwargs
+    data,
+    ax=None,
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    trl_field="trial",
+    day_field="day",
+    color_gap=0.2,
+    cm="Blues",
+    **kwargs,
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
@@ -103,17 +110,17 @@ def plot_performance(
 
 @gpl.ax_adder
 def plot_cross_shape_generalization(
-        shape,
-        pre_session,
-        post_session,
-        ax=None,
-        fwid=1,
-        shape_color=None,
-        session_color=None,
-        gen_tick=.2,
-        t_ind=0,
-        key_pairs=(("dec", "gen"), ("dec_flip", "gen_flip")),
-        markers=("o", "s"),
+    shape,
+    pre_session,
+    post_session,
+    ax=None,
+    fwid=1,
+    shape_color=None,
+    session_color=None,
+    gen_tick=0.2,
+    t_ind=0,
+    key_pairs=(("dec", "gen"), ("dec_flip", "gen_flip")),
+    markers=("o", "s"),
 ):
     out_list = (pre_session, shape, post_session)
     colors = (session_color, shape_color, session_color)
@@ -136,13 +143,13 @@ def plot_cross_shape_generalization(
                 )
     ax.set_xticks([0, 1, 2])
     ax.set_xticklabels(["pre", "shape", "post"])
-    gpl.add_hlines(.5, ax)
+    gpl.add_hlines(0.5, ax)
 
 
 def plot_eg_neurons(pop, xs, axs=None, fwid=1):
     if axs is None:
         n_plot = int(np.ceil(np.sqrt(pop.shape[1])))
-        f, axs = plt.subplots(n_plot, n_plot, figsize=(fwid*n_plot, fwid*n_plot))
+        f, axs = plt.subplots(n_plot, n_plot, figsize=(fwid * n_plot, fwid * n_plot))
         axs = axs.flatten()
     for i in range(pop.shape[1]):
         gpl.plot_trace_werr(xs, pop[:, i], ax=axs[i])
@@ -152,48 +159,58 @@ def plot_eg_neurons(pop, xs, axs=None, fwid=1):
 def plot_decoding_tc(dec, xs, gen=None, axs=None, ax=None, fwid=3, time_key="stim on"):
     n_plots = len(dec)
     if axs is None and ax is None:
-        f, axs = plt.subplots(n_plots, 1, figsize=(fwid, n_plots*fwid))
+        f, axs = plt.subplots(n_plots, 1, figsize=(fwid, n_plots * fwid))
     if axs is None and ax is not None:
         axs = np.zeros((n_plots), dtype=object)
         axs[:] = ax
 
     for i, (k, dec_i) in enumerate(dec.items()):
-        ls = gpl.plot_trace_werr(xs, dec_i, ax=axs[i], confstd=True,)
+        ls = gpl.plot_trace_werr(
+            xs,
+            dec_i,
+            ax=axs[i],
+            confstd=True,
+        )
         if gen is not None:
             col = ls[0].get_color()
             gpl.plot_trace_werr(
-                xs, gen[i], color=col, ax=axs[i], ls="dashed", confstd=True,
+                xs,
+                gen[i],
+                color=col,
+                ax=axs[i],
+                ls="dashed",
+                confstd=True,
             )
         axs[i].set_ylabel("decoding performance")
-        gpl.add_hlines(.5, axs[i])
+        gpl.add_hlines(0.5, axs[i])
     axs[i].set_xlabel("time relative to {}".format(time_key))
     return axs
 
 
 def plot_decoding_hist(
-        dec_dict,
-        xs,
-        t_ind=200,
-        ax=None,
-        time_key="stim on",
-        only_region=None,
-        color=None,
-        cmap=None,
-        col_cut=.3,
-        x_range=None,
-        **kwargs,        
+    dec_dict,
+    xs,
+    t_ind=200,
+    ax=None,
+    time_key="stim on",
+    only_region=None,
+    color=None,
+    cmap=None,
+    col_cut=0.3,
+    x_range=None,
+    **kwargs,
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
     out_sd = _sort_decs(dec_dict, xs, t_ind, only_region=only_region)
     days, shapes = out_sd[:2]
-    
+
     preds, targs = out_sd[-2:]
     if cmap is not None:
         cm = plt.get_cmap(cmap)
         colors = cm(np.linspace(col_cut, 1 - col_cut, len(days)))
     else:
-        colors = (color,)*len(days)
+        colors = (color,) * len(days)
     x_min, x_max = np.inf, -np.inf
     for i, pred in enumerate(preds):
         xs = np.concatenate(list(p_j.flatten() for p_j in pred))
@@ -209,32 +226,32 @@ def plot_decoding_hist(
 
 
 def plot_decoding_scatter(
-        dec_dict,
-        xs,
-        t_ind=200,
-        ax=None,
-        time_key="stim on",
-        only_region=None,
-        color=None,
-        cmap=None,
-        col_cut=.3,
-        ms=1,
-        y_range=None,
-        x_range=None,
-        use_targ_range=True,
-        **kwargs,
+    dec_dict,
+    xs,
+    t_ind=200,
+    ax=None,
+    time_key="stim on",
+    only_region=None,
+    color=None,
+    cmap=None,
+    col_cut=0.3,
+    ms=1,
+    y_range=None,
+    x_range=None,
+    use_targ_range=True,
+    **kwargs,
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
     out_sd = _sort_decs(dec_dict, xs, t_ind, only_region=only_region)
     days, shapes = out_sd[:2]
-    
+
     preds, targs = out_sd[-2:]
     if cmap is not None:
         cm = plt.get_cmap(cmap)
         colors = cm(np.linspace(col_cut, 1 - col_cut, len(days)))
     else:
-        colors = (color,)*len(days)
+        colors = (color,) * len(days)
     y_min, y_max = np.inf, -np.inf
     x_min, x_max = np.inf, -np.inf
     for i, pred in enumerate(preds):
@@ -257,15 +274,18 @@ def plot_decoding_scatter(
         ax.set_xlim([x_min, x_max])
     else:
         ax.set_xlim(x_range)
-    ax.plot([x_min, x_max], [y_min, y_max], color=(.8, .8, .8))
+    ax.plot([x_min, x_max], [y_min, y_max], color=(0.8, 0.8, 0.8))
     return ax
 
 
 def _sort_decs(
-    dec_dict, xs, t_ind=200, only_region=None,
+    dec_dict,
+    xs,
+    t_ind=200,
+    only_region=None,
 ):
     if t_ind is not None:
-        x_ind = np.argmin((t_ind - xs)**2)
+        x_ind = np.argmin((t_ind - xs) ** 2)
     days = []
     shapes = []
     for i, ((day, shape, region), v) in enumerate(dec_dict.items()):
@@ -296,7 +316,10 @@ def _sort_decs(
         days = days[sort_inds]
         shapes = shapes[sort_inds]
         outs = tuple(o[sort_inds] for o in outs)
-    return (days, shapes,) + outs
+    return (
+        days,
+        shapes,
+    ) + outs
 
 
 def plot_latent_space(lv1, lv2, imgs, axs=None, fwid=2):
@@ -304,7 +327,7 @@ def plot_latent_space(lv1, lv2, imgs, axs=None, fwid=2):
     lv2_u = np.unique(lv2)
     if axs is None:
         f, axs = plt.subplots(
-            len(lv1_u), len(lv2_u), figsize=(fwid*len(lv2_u), fwid*len(lv1_u))
+            len(lv1_u), len(lv2_u), figsize=(fwid * len(lv2_u), fwid * len(lv1_u))
         )
     img_dict = {(lv1_i, lv2[i]): imgs[i] for i, lv1_i in enumerate(lv1)}
     for i, j in it.product(range(len(lv1_u)), range(len(lv2_u))):
@@ -327,7 +350,7 @@ def plot_decoding_dict_tc(
     plot_gen=False,
     color=None,
     cmap=None,
-    col_cut=.3,
+    col_cut=0.3,
     label="",
     **kwargs,
 ):
@@ -340,28 +363,35 @@ def plot_decoding_dict_tc(
         cm = plt.get_cmap(cmap)
         colors = cm(np.linspace(col_cut, 1 - col_cut, len(days)))
     else:
-        colors = (color,)*len(days)
+        colors = (color,) * len(days)
 
     if plot_gen:
         decs = gens
 
-    labels = ("",)*(len(decs) - 1) + (label,)
+    labels = ("",) * (len(decs) - 1) + (label,)
     for i, dec_i in enumerate(decs):
         gpl.plot_trace_werr(
             xs,
             np.mean(dec_i, axis=0),
             ax=ax,
-            lw=.8,
+            lw=0.8,
             color=colors[i],
             label=labels[i],
             **kwargs,
         )
-        
+
     ax.set_xlabel("time from {}".format(time_key))
 
 
 def plot_aggregate_session_dec(
-    dec_dict, xs, t_ind=200, pt=0, ax=None, plot_gen=False, only_region=None, **kwargs,
+    dec_dict,
+    xs,
+    t_ind=200,
+    pt=0,
+    ax=None,
+    plot_gen=False,
+    only_region=None,
+    **kwargs,
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
@@ -374,7 +404,13 @@ def plot_aggregate_session_dec(
 
 
 def plot_cross_session_dec(
-    dec_dict, xs, t_ind=200, ax=None, plot_gen=False, only_region=None, **kwargs,
+    dec_dict,
+    xs,
+    t_ind=200,
+    ax=None,
+    plot_gen=False,
+    only_region=None,
+    **kwargs,
 ):
     if ax is None:
         f, ax = plt.subplots(1, 1)
@@ -389,14 +425,16 @@ def plot_cross_session_dec(
 def plot_session_rfs(feats, pop, min_trls=5, axs=None, fwid=1, cmap="Blues"):
     if axs is None:
         n_plots = int(np.ceil(np.sqrt(pop.shape[1])))
-        f, axs = plt.subplots(n_plots, n_plots, figsize=(fwid*n_plots, fwid*n_plots))
+        f, axs = plt.subplots(
+            n_plots, n_plots, figsize=(fwid * n_plots, fwid * n_plots)
+        )
         axs = axs.flatten()
     ns, (e1, e2) = np.histogramdd(feats)
-    xs = e1[:-1] + np.diff(e1)[0]/2
-    ys = e2[:-1] + np.diff(e2)[0]/2
+    xs = e1[:-1] + np.diff(e1)[0] / 2
+    ys = e2[:-1] + np.diff(e2)[0] / 2
     for i in range(pop.shape[1]):
         spks, (e1, e2) = np.histogramdd(feats, weights=pop[:, i])
-        img = spks/ns
+        img = spks / ns
         img[ns < min_trls] = np.nan
         gpl.pcolormesh(xs, ys, img, cmap="Blues", ax=axs[i])
         gpl.clean_plot(axs[i], 1)
@@ -432,7 +470,7 @@ def plot_sampled_stimuli(
         f, ax = plt.subplots(1, 1)
 
     cats = data[stim_cat_field][ind].to_numpy()
-    feats = np.stack(data[stim_feat_field][ind].to_numpy(), axis=0)/1000
+    feats = np.stack(data[stim_feat_field][ind].to_numpy(), axis=0) / 1000
 
     ax.plot(feats[cats == 1][:, 0], feats[cats == 1][:, 1], "o", color=color1, ms=ms)
     ax.plot(feats[cats == 2][:, 0], feats[cats == 2][:, 1], "o", color=color2, ms=ms)
@@ -440,19 +478,19 @@ def plot_sampled_stimuli(
     cat_boundary_angles = np.unique(data[cat_bound_field][ind].to_numpy())
     for cba in cat_boundary_angles:
         ax.plot(
-            np.cos(np.radians(cba))*np.array([-1, +1]),
-            np.sin(np.radians(cba))*np.array([-1, +1]),
-            'k',
+            np.cos(np.radians(cba)) * np.array([-1, +1]),
+            np.sin(np.radians(cba)) * np.array([-1, +1]),
+            "k",
         )
     if plot_effective_boundary:
         eb = sla.estimate_decision_boundary(data, ind=ind)
         ax.plot(
-            eb["boundary"][0][0]*np.array([-1, +1]),
-            -eb["boundary"][0][1]*np.array([-1, +1]),
-            'k',
+            eb["boundary"][0][0] * np.array([-1, +1]),
+            -eb["boundary"][0][1] * np.array([-1, +1]),
+            "k",
             linestyle="dashed",
         )
 
     gpl.clean_plot(ax, 0)
-    gpl.make_xaxis_scale_bar(ax, magnitude=.5, label="width", text_buff=.28)
-    gpl.make_yaxis_scale_bar(ax, magnitude=.5, label="height", text_buff=.45)
+    gpl.make_xaxis_scale_bar(ax, magnitude=0.5, label="width", text_buff=0.28)
+    gpl.make_yaxis_scale_bar(ax, magnitude=0.5, label="height", text_buff=0.45)

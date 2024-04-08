@@ -7,6 +7,16 @@ import pandas as pd
 import general.utility as u
 import general.neural_analysis as na
 
+import sequential_learning.auxiliary as slaux
+
+
+def uniform_sample_mask(data, **kwargs):
+    mask = slaux.sample_uniform_mask(data, **kwargs)
+    data = data.mask(mask)
+    session_mask = list(np.sum(x) > 0 for x in mask)
+    data = data.session_mask(session_mask)
+    return data
+
 
 def stack_features(feats, ind=None, div=1000):
     stacked_feats = []
@@ -273,10 +283,111 @@ def _make_out_dict(
     for i, dec in enumerate(out[0]):
         key = (days[i], shapes[i], regions[i])
         out_dict[key] = tuple(x[i] for x in out[0:1] + out[2:])
-    
+
     xs = out[1]
     out_full = (out_dict, xs)
     return out_full
+
+
+def _format_cross_session_info(
+    *dm_pairs,
+    winsize=500,
+    tbeg=-500,
+    tend=500,
+    shape_field="shape",
+    date_field="date",
+    region="IT",
+    time_zero_field="stim_on",
+    stepsize=50,
+):
+    pops1 = []
+    pops2 = []
+    shapes = []
+    dates = []
+    for data, masks in dm_pairs:
+        xs, (pop1, pop2) = data.get_dec_pops(
+            winsize,
+            tbeg,
+            tend,
+            stepsize,
+            *masks,
+            tzfs=(time_zero_field,) * len(masks),
+            regions=(region,),
+            shuffle_trials=False,
+        )
+        mask = []
+        for i, pop1_i in enumerate(pop1):
+            pop2_i = pop2[i]
+            mask_i = pop1_i.shape[0] > 0 and pop1_i.shape[2] > 1 and pop2_i.shape[2] > 1
+            mask.append(mask_i)
+        mask = np.array(mask)
+        shapes.extend(np.array(data[shape_field])[mask])
+        dates.extend(np.array(data[date_field])[mask])
+        pop1 = np.array(pop1, dtype=object)[mask]
+        pop2 = np.array(pop2, dtype=object)[mask]
+        pops1.extend(pop1)
+        pops2.extend(pop2)
+    return shapes, dates, (pops1, pops2)
+
+
+def _generalize_cross_session_decoder(
+    shapes, dates, pops1, pops2, indiv_zscore=True, n_folds=20, **kwargs
+):
+    if indiv_zscore:
+        for i, p1_i in enumerate(pops1):
+            p2_i = pops2[i]
+            p1_i, p2_i = na.zscore_tc(p1_i, p2_i)
+            pops1[i] = p1_i
+            pops2[i] = p2_i
+        kwargs["norm"] = False
+
+    out_gen = np.zeros((len(pops1), len(pops2)), dtype=object)
+    for i, p1_i in enumerate(pops1):
+        p2_i = pops2[i]
+        out = na.fold_skl(p1_i, p2_i, n_folds, mean=False, **kwargs)
+        out_gen[i, i] = out["score"]
+        for j, p1_j in enumerate(pops1):
+            p2_j = pops2[j]
+            if i != j:
+                out_gen[i, j] = na.apply_estimators_discrete(
+                    out["estimators"], p1_j, p2_j, 
+                )
+    return shapes, dates, out_gen
+
+
+def cross_session_generalization(
+    *dm_pairs,
+    winsize=500,
+    tbeg=-500,
+    tend=500,
+    stepsize=50,
+    shape_field="shape",
+    date_field="date",
+    region="IT",
+    time_zero_field="stim_on",
+    indiv_zscore=True,
+    n_folds=20,
+    **kwargs,
+):
+    shapes, dates, (pops1, pops2) = _format_cross_session_info(
+        *dm_pairs,
+        winsize=winsize,
+        tbeg=tbeg,
+        tend=tend,
+        stepsize=stepsize,
+        region=region,
+        time_zero_field=time_zero_field,
+    )
+    out = _generalize_cross_session_decoder(
+        shapes,
+        dates,
+        pops1,
+        pops2,
+        indiv_zscore=indiv_zscore,
+        n_folds=n_folds,
+        **kwargs,
+    )
+    return out
 
 
 def cross_data_generalization(
@@ -295,12 +406,16 @@ def cross_data_generalization(
     time_zero_field="stim_on",
     region="IT",
     flip=True,
+    indiv_zscore=True,
     **kwargs,
 ):
     if ind_pairs is None:
         ind_pairs = list(zip(range(len(masks1)), range(len(masks2))))
     if params is None:
-        params = {"class_weight": "balanced", "max_iter": max_iter,}
+        params = {
+            "class_weight": "balanced",
+            "max_iter": max_iter,
+        }
 
     out1 = data1.get_dec_pops(
         *args,
@@ -336,6 +451,10 @@ def cross_data_generalization(
         p12 = pops1_m2[ind1]
         p21 = pops2_m1[ind2]
         p22 = pops2_m2[ind2]
+        if indiv_zscore:
+            p11, p12 = na.zscore_tc(p11, p12)
+            p21, p22 = na.zscore_tc(p21, p22)
+            kwargs["norm"] = False
 
         out = na.fold_skl(
             p11,
@@ -462,8 +581,11 @@ def decode_category(
     *args,
     cat_field="stim_sample_MAIN",
     time_zero_field="stim_on",
+    uniform_resample=False,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
     targs = data[cat_field]
     t1_mask = targs == 1
     t2_mask = targs == 2
@@ -485,8 +607,11 @@ def decode_feature_values(
     *args,
     feat_field="cat_proj",
     time_zero_field="stim_on",
+    uniform_resample=False,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
     targ_feat = data[feat_field]
     mask = targ_feat.rs_isnan().rs_not()
     data_use = data.mask(mask)
@@ -526,8 +651,11 @@ def generalize_feature_values(
     gen_field="anticat_proj",
     gap=0,
     time_zero_field="stim_on",
+    uniform_resample=False,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
     targ_feat = data[feat_field]
     mask = targ_feat.rs_isnan().rs_not()
     data_use = data.mask(mask)
@@ -564,8 +692,12 @@ def decode_xor(
     cat_bound_field="cat_def_MAIN",
     time_zero_field="stim_on",
     eps=1e-10,
+    uniform_resample=False,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
+
     coherence = np.zeros(data.n_sessions)
     boundary_vecs = np.zeros((data.n_sessions, 2, 2))
     if cat_field == "stim_sample_MAIN":
@@ -632,9 +764,13 @@ def generalize_category(
     print_proportion=False,
     ortho_category_decode=False,
     ortho_category_generalize=False,
+    uniform_resample=False,
     thr=0,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
+
     targs = data[cat_field]
     t1_masks = targs == 1
     t2_masks = targs == 2
