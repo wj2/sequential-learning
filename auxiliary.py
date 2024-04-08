@@ -106,7 +106,7 @@ def sample_uniform_mask(
     return masks
 
 
-def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?"):
+def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?(postA[0-9]+)?"):
     fls = os.listdir(use_folder)
     out = list(fl for fl in fls if re.match(pattern, fl) is not None)
     return out
