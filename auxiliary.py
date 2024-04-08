@@ -324,6 +324,16 @@ def parse_dates(dates):
     return out
 
 
+def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN"):
+    masks = []
+    for data in datas:
+        mask = list(
+            (np.stack(x, axis=0)[:, feat_ind] > 0) for x in data[feat_field]
+        )
+        masks.append(mask)
+    return masks
+
+
 def get_prototype_masks(
     main_data,
     *datas,

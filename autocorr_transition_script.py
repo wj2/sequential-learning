@@ -34,8 +34,9 @@ def create_parser():
     parser.add_argument("--tend", default=500, type=float)
     parser.add_argument("--jobid", default="0000", type=str)
     parser.add_argument("--sequence_ind", default=0, type=int)
-    parser.add_argument("--fwid", default=5, type=float)
+    parser.add_argument("--fwid", default=6, type=float)
     parser.add_argument("--no_indiv_zscore", default=False, action="store_true")
+    parser.add_argument("--use_binary_feature", default=None, type=int)
     return parser
 
 
@@ -56,9 +57,12 @@ if __name__ == "__main__":
 
     data_dict = slaux.load_shape_list((s1, s2))
 
-    shape_str = "{}-{}".format(s1, s2)
-
-    mask_s2, mask_s1 = slaux.get_prototype_masks(data_dict[s2], data_dict[s1])
+    if args.use_binary_feature is not None:
+        mask_s2, mask_s1 = slaux.get_binary_feature_masks(
+            data_dict[s2], data_dict[s1], feat_ind=args.use_binary_feature
+        )
+    else:
+        mask_s2, mask_s1 = slaux.get_prototype_masks(data_dict[s2], data_dict[s1])
     out = sla.cross_session_generalization(
         (data_dict[s1], mask_s1),
         (data_dict[s2], mask_s2),
@@ -69,6 +73,7 @@ if __name__ == "__main__":
         indiv_zscore=not args.no_indiv_zscore,
     )
 
+    shape_str = "{}-{}".format(s1, s2)
     fn = args.output_template.format(shape=shape_str, jobid=args.jobid)
     path = os.path.join(args.output_folder, fn)
     out_dict = {"args": vars(args), "gen": out}
