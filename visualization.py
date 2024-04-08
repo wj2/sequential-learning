@@ -5,6 +5,7 @@ import itertools as it
 import general.plotting as gpl
 import general.utility as u
 import sequential_learning.analysis as sla
+import sequential_learning.auxiliary as slaux
 
 
 def plot_session_change(
@@ -440,6 +441,39 @@ def plot_session_rfs(feats, pop, min_trls=5, axs=None, fwid=1, cmap="Blues"):
         gpl.clean_plot(axs[i], 1)
         gpl.clean_plot_bottom(axs[i])
     return axs
+
+
+@gpl.ax_adder()
+def plot_decoder_autocorrelation(
+    shapes,
+    dates,
+    gen_arr,
+    ax=None,
+    within_shape_color="g",
+    across_shape_color="r",
+    t_ind=10,
+    chance=0.5,
+):
+    dates = slaux.parse_dates(dates)
+    for i, j in u.make_array_ind_iterator(gen_arr.shape):
+        x = (dates[j] - dates[i]).days
+        y = gen_arr[i, j]
+        if shapes[i] == shapes[j]:
+            color = within_shape_color
+        else:
+            color = across_shape_color
+        gpl.plot_trace_werr(
+            [x],
+            np.expand_dims(y[:, t_ind], 1),
+            ax=ax,
+            fill=False,
+            color=color,
+            confstd=True,
+            points=True,
+        )
+    gpl.add_hlines(chance, ax)
+    ax.set_xlabel("day difference")
+    ax.set_ylabel("generalization performance")
 
 
 def plot_nl_decision_boundary(m, var_range=(-1, 1), ax=None, n_pts=100, cmap="bwr"):

@@ -42,6 +42,24 @@ sequence_groups = {
 }
 
 
+shape_sequence = (
+    "A2",
+    "A3",
+    "A4",
+    "A3postA4",
+    "A5",
+    "A4postA5",
+    "A3postA5",
+    "A6",
+    "A5postA6",
+    "A7",
+    "A6postA7",
+    "A8",
+    "A9",
+    "A10",
+)
+
+
 def load_shape_list(
     shapes,
     data_folder=BASEFOLDER,
@@ -76,7 +94,7 @@ def sample_uniform_mask(
     anti_cats = data[anticat_proj]
     if proj_range is None:
         p_end = np.max(list(np.max(np.abs(x)) for x in cats))
-        p_end = np.min([.71, p_end])
+        p_end = np.min([0.71, p_end])
         proj_range = (-p_end - eps, p_end + eps)
     edges = (np.linspace(*proj_range, n_bins + 1),) * 2
     masks = []
@@ -92,7 +110,7 @@ def sample_uniform_mask(
         )
         _, counts = np.unique(binnumber, return_counts=True)
         trl_samps = np.min(counts)
-        
+
         if trl_samps > 1:
             splitter = skms.StratifiedShuffleSplit(
                 n_splits=1,
@@ -279,3 +297,71 @@ def filter_valid(
     )
     full_mask = mask1.rs_and(mask2).rs_and(mask3).rs_and(mask4)
     return data.mask(full_mask)
+
+
+def _filter_and_categorize(
+    data,
+    *centroids,
+    sample_radius=100,
+    stim_feat_field="stim_feature_MAIN",
+):
+    masks = []
+    stim_feats = list(np.stack(sf, axis=0) for sf in data[stim_feat_field])
+    for cent in centroids:
+        sub_masks = []
+        if len(cent.shape) == 1:
+            cent = np.expand_dims(cent, 0)
+        for sf in stim_feats:
+            m_sf = np.sqrt(np.sum((sf - cent) ** 2, axis=1)) < sample_radius
+            sub_masks.append(m_sf)
+        masks.append(sub_masks)
+    return masks
+
+
+def parse_dates(dates):
+    dates = list(date[:-1] for date in dates)
+    out = pd.to_datetime(dates, yearfirst=True)
+    return out
+
+
+def get_prototype_masks(
+    main_data,
+    *datas,
+    cat_field="stim_sample_MAIN",
+    stim_feat_field="stim_feature_MAIN",
+    session_ind=0,
+    sample_radius=100,
+):
+    cat1_mask = main_data[cat_field] == 1
+    cat1_stim = main_data.mask(cat1_mask)
+    c1_arr = np.stack(cat1_stim[stim_feat_field][session_ind], axis=0)
+    cat1_average = np.mean(
+        c1_arr,
+        axis=0,
+    )
+
+    cat2_mask = main_data[cat_field] == 2
+    cat2_stim = main_data.mask(cat2_mask)
+    c2_arr = np.stack(cat2_stim[stim_feat_field][session_ind], axis=0)
+    cat2_average = np.mean(
+        c2_arr,
+        axis=0,
+    )
+
+    main_masks = _filter_and_categorize(
+        main_data,
+        cat1_average,
+        cat2_average,
+        sample_radius=sample_radius,
+    )
+
+    masks = [main_masks]
+    for data in datas:
+        mask = _filter_and_categorize(
+            data,
+            cat1_average,
+            cat2_average,
+            sample_radius=sample_radius,
+        )
+    masks.append(mask)
+    return masks

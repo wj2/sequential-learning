@@ -29,31 +29,6 @@ def stack_features(feats, ind=None, div=1000):
     return stacked_feats
 
 
-def _filter_and_categorize(
-    data,
-    *centroids,
-    sample_radius=100,
-    stim_feat_field="stim_feature_MAIN",
-):
-    masks = []
-    stim_feats = list(np.stack(sf, axis=0) for sf in data[stim_feat_field])
-    for cent in centroids:
-        sub_masks = []
-        if len(cent.shape) == 1:
-            cent = np.expand_dims(cent, 0)
-        for sf in stim_feats:
-            m_sf = np.sqrt(np.sum((sf - cent) ** 2, axis=1)) < sample_radius
-            sub_masks.append(m_sf)
-        masks.append(sub_masks)
-    return masks
-
-
-def _parse_dates(dates):
-    dates = list(date[:-1] for date in dates)
-    out = pd.to_datetime(dates, yearfirst=True)
-    return out
-
-
 def compute_unit_dprime(
     data,
     *args,
@@ -99,8 +74,8 @@ def compute_cross_shape_generalization(
     sample_radius=300,
     **kwargs,
 ):
-    pre_dates = _parse_dates(pre_data[date_field])
-    post_dates = _parse_dates(post_data[date_field])
+    pre_dates = slaux.parse_dates(pre_data[date_field])
+    post_dates = slaux.parse_dates(post_data[date_field])
     date_diff = post_dates[0] - pre_dates[-1]
 
     pre_targ_diff = pre_dates[-1] - pre_dates - date_diff
@@ -128,35 +103,8 @@ def compute_cross_shape_generalization(
     data_post = post_data.session_mask(post_mask)
 
     # post data has most restricted set of points
-    cat1_mask = data_post[cat_field] == 1
-    cat1_stim = data_post.mask(cat1_mask)
-    c1_arr = np.stack(cat1_stim[stim_feat_field][0], axis=0)
-    cat1_average = np.mean(
-        c1_arr,
-        axis=0,
-    )
+    post_dec_masks, pre_dec_masks = slaux.get_prototype_masks(data_post, data_pre)
 
-    cat2_mask = data_post[cat_field] == 2
-    cat2_stim = data_post.mask(cat2_mask)
-    c2_arr = np.stack(cat2_stim[stim_feat_field][0], axis=0)
-    cat2_average = np.mean(
-        c2_arr,
-        axis=0,
-    )
-
-    pre_dec_masks = _filter_and_categorize(
-        data_pre,
-        cat1_average,
-        cat2_average,
-        sample_radius=sample_radius,
-    )
-
-    post_dec_masks = _filter_and_categorize(
-        data_post,
-        cat1_average,
-        cat2_average,
-        sample_radius=sample_radius,
-    )
     ind_pairs = ((-1, 0),)
     out_shape = cross_data_generalization(
         data_pre,
@@ -331,7 +279,14 @@ def _format_cross_session_info(
 
 
 def _generalize_cross_session_decoder(
-    shapes, dates, pops1, pops2, indiv_zscore=True, n_folds=20, **kwargs
+    shapes,
+    dates,
+    pops1,
+    pops2,
+    indiv_zscore=True,
+    n_folds=20,
+    model=skm.LinearSVC,
+    **kwargs,
 ):
     if indiv_zscore:
         for i, p1_i in enumerate(pops1):
@@ -344,13 +299,15 @@ def _generalize_cross_session_decoder(
     out_gen = np.zeros((len(pops1), len(pops2)), dtype=object)
     for i, p1_i in enumerate(pops1):
         p2_i = pops2[i]
-        out = na.fold_skl(p1_i, p2_i, n_folds, mean=False, **kwargs)
+        out = na.fold_skl(p1_i, p2_i, n_folds, mean=False, model=model, **kwargs)
         out_gen[i, i] = out["score"]
         for j, p1_j in enumerate(pops1):
             p2_j = pops2[j]
             if i != j:
                 out_gen[i, j] = na.apply_estimators_discrete(
-                    out["estimators"], p1_j, p2_j, 
+                    out["estimators"],
+                    p1_j,
+                    p2_j,
                 )
     return shapes, dates, out_gen
 
