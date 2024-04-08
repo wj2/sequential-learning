@@ -447,13 +447,15 @@ def plot_session_rfs(feats, pop, min_trls=5, axs=None, fwid=1, cmap="Blues"):
 def plot_decoder_autocorrelation(
     shapes,
     dates,
+    xs,
     gen_arr,
     ax=None,
     within_shape_color="g",
     across_shape_color="r",
-    t_ind=10,
+    t_targ=150,
     chance=0.5,
 ):
+    t_ind = np.argmin(np.abs(xs - t_targ))
     dates = slaux.parse_dates(dates)
     for i, j in u.make_array_ind_iterator(gen_arr.shape):
         x = (dates[j] - dates[i]).days

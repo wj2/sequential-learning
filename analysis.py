@@ -275,7 +275,7 @@ def _format_cross_session_info(
         pop2 = np.array(pop2, dtype=object)[mask]
         pops1.extend(pop1)
         pops2.extend(pop2)
-    return shapes, dates, (pops1, pops2)
+    return shapes, dates, xs, (pops1, pops2)
 
 
 def _generalize_cross_session_decoder(
@@ -326,7 +326,7 @@ def cross_session_generalization(
     n_folds=20,
     **kwargs,
 ):
-    shapes, dates, (pops1, pops2) = _format_cross_session_info(
+    shapes, dates, xs, (pops1, pops2) = _format_cross_session_info(
         *dm_pairs,
         winsize=winsize,
         tbeg=tbeg,
@@ -344,7 +344,8 @@ def cross_session_generalization(
         n_folds=n_folds,
         **kwargs,
     )
-    return out
+    shapes, dates, gen_arr = out
+    return shapes, dates, xs, gen_arr
 
 
 def cross_data_generalization(
