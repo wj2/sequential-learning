@@ -97,13 +97,13 @@ class SequenceLearningFigure(pu.Figure):
         uniform_resample = self.params.getboolean("uniform_resample")
         if self.data.get(key) is None or recompute:
             data = self.load_shape_data()
-            if not strict_prototype:
+            if strict_prototype:
+                m1, m2 = slaux.get_strict_prototype_masks(data)[0]
+                data_session = data.mask(m1.rs_or(m2))
+                uniform_resample = False
+            else:
                 var_ratio = sla.compute_var_ratio(data)
                 data_session = data.session_mask(var_ratio > var_thr)
-            else:
-                masks = slaux.get_strict_prototype_masks(data)[0]
-                data_session = data.mask(masks)
-                uniform_resample = False
             outs = {}
             for r in regions:
                 args = (data_session, winsize, tbeg, tend, step)
@@ -461,7 +461,7 @@ class ContinuousDecodingFigure(SequenceLearningFigure):
 
         self.gss = gss
 
-    def panel_decoding(self, recompute=True):
+    def panel_decoding(self, recompute=True, **kwargs):
         key = "panel_decoding"
 
         func_and_name = {
@@ -482,6 +482,7 @@ class ContinuousDecodingFigure(SequenceLearningFigure):
             chance=chance,
             recompute=recompute,
             inset=True,
+            **kwargs,
         )
 
 
@@ -509,7 +510,7 @@ class DecodingFigure(SequenceLearningFigure):
 
         self.gss = gss
 
-    def panel_decoding(self, recompute=True):
+    def panel_decoding(self, recompute=True, **kwargs):
         key = "panel_decoding"
         func_and_name = {
             "category": sla.decode_category,
@@ -524,5 +525,5 @@ class DecodingFigure(SequenceLearningFigure):
         }
         chance = 0.5
         self._generic_decoding(
-            key, func_and_name, plot_gen, chance=chance, recompute=recompute
+            key, func_and_name, plot_gen, chance=chance, recompute=recompute, **kwargs,
         )
