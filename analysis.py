@@ -2,7 +2,6 @@ import itertools as it
 import numpy as np
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
-import pandas as pd
 
 import general.utility as u
 import general.neural_analysis as na

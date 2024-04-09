@@ -113,6 +113,8 @@ def sample_uniform_mask(
         )
         _, counts_nz = np.unique(binnumber, return_counts=True)
         trl_samps = np.min(counts_distrib)
+        print(counts_distrib)
+        print(edges)
 
         if trl_samps > 1:
             splitter = skms.StratifiedShuffleSplit(
@@ -216,8 +218,8 @@ def _get_projs(
     anti_cat_vec = u.make_unit_vector(
         np.array(
             [
-                np.cos(np.radians(cba)),
                 np.sin(np.radians(cba)),
+                np.cos(np.radians(cba)),
             ]
         )
     )
