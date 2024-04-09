@@ -327,10 +327,14 @@ def parse_dates(dates):
 def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN"):
     masks = []
     for data in datas:
-        mask = list(
+        mask1 = list(
             (np.stack(x, axis=0)[:, feat_ind] > 0) for x in data[feat_field]
         )
-        masks.append(mask)
+        mask2 = list(
+            (np.stack(x, axis=0)[:, feat_ind] <= 0) for x in data[feat_field]
+        )
+
+        masks.append((gio.ResultSequence(mask1), gio.ResultSequence(mask2)))
     return masks
 
 
