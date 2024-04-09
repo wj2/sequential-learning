@@ -66,6 +66,7 @@ def plot_session_average(
     targ_field="stim_sample_MAIN",
     day_field="day",
     n_boots=500,
+    uniform_resample=True,
     **kwargs,
 ):
     days = data[day_field]
@@ -74,8 +75,11 @@ def plot_session_average(
     targets = data[targ_field]
     corr = np.zeros((n_boots, len(days)))
     for i, ind in enumerate(inds):
-        perf = choices[ind].to_numpy() == targets[ind].to_numpy()
-        corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
+        if uniform_resample:
+            corr[:, i] = sla.resample_uniform_performance(data, ind, n_samps=n_boots)
+        else:
+            perf = choices[ind].to_numpy() == targets[ind].to_numpy()
+            corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
     gpl.plot_trace_werr(days, corr, ax=ax, conf95=True, **kwargs)
     gpl.add_hlines(0.5, ax)
 

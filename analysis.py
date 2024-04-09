@@ -312,6 +312,17 @@ def _generalize_cross_session_decoder(
     return shapes, dates, out_gen
 
 
+def resample_uniform_performance(
+    data, ind, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000
+):
+    corr = data[cho_field][ind] == data[targ_field][ind]
+    perf = np.zeros(n_samps)
+    for i in range(n_samps):
+        mask = slaux.sample_uniform_mask(data)[ind]
+        perf[i] = np.nanmean(corr[mask])
+    return perf
+
+
 def cross_session_generalization(
     *dm_pairs,
     winsize=500,

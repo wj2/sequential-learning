@@ -19,8 +19,8 @@ ft1 = (
     "\\-d(?P<day>[0-9]+)\\.[0-9]+\\.FIRA\\.mat"
 )
 ft2 = (
-    "A(?P<date>[0-9a-z]+)\\.(?P<shape>A[0-9]+)\\-d?(?P<day>[0-9]+)(\\.postA[0-9]+)?"
-    "\\.FIRA\\.LMAN_"
+    "A(?P<date>[0-9a-z]+)\\.(?P<shape>A[0-9]+(\\-t)?)\\-d?(?P<day>[0-9]+)"
+    "(\\.postA[0-9]+)?\\.FIRA\\.LMAN_"
     "cat\\.(?P<region>[A-Z0-9+]+)\\.mat"
 )
 file_templates = (ft1, ft2)
@@ -56,7 +56,9 @@ shape_sequence = (
     "A6postA7",
     "A8",
     "A9",
+    "A9t",
     "A10",
+    "A10t",
 )
 
 
