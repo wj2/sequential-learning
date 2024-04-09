@@ -91,6 +91,7 @@ def sample_uniform_mask(
     proj_range=None,
     n_bins=5,
     eps=1e-10,
+    n_samps=1,
 ):
     cats = data[cat_proj]
     anti_cats = data[anticat_proj]
@@ -104,25 +105,27 @@ def sample_uniform_mask(
         anti_cat_i = anti_cats[i]
         sample_pos = np.stack((cat_i, anti_cat_i), axis=1)
 
-        counts, edges, binnumber = sts.binned_statistic_dd(
+        counts_distrib, edges, binnumber = sts.binned_statistic_dd(
             sample_pos,
             np.ones(len(sample_pos)),
             statistic="count",
             bins=edges,
         )
-        _, counts = np.unique(binnumber, return_counts=True)
-        trl_samps = np.min(counts)
+        _, counts_nz = np.unique(binnumber, return_counts=True)
+        trl_samps = np.min(counts_distrib)
 
         if trl_samps > 1:
             splitter = skms.StratifiedShuffleSplit(
-                n_splits=1,
-                train_size=int(trl_samps) * n_bins**2,
+                n_splits=n_samps,
+                train_size=int(trl_samps) * len(counts_nz),
             )
-            samp_inds, _ = list(splitter.split(sample_pos, binnumber))[0]
+            samp_inds = list(tr for tr, _ in splitter.split(sample_pos, binnumber))
+            samp_inds = np.stack(samp_inds, axis=0)
         else:
-            samp_inds = []
-        mask_i = np.isin(np.arange(len(cat_i)), samp_inds)
-        masks.append(mask_i)
+            samp_inds = np.zeros((n_samps, 0))
+        trl_inds = np.arange(len(cat_i))
+        mask_i = np.array(list(np.isin(trl_inds, si) for si in samp_inds)).T
+        masks.append(np.squeeze(mask_i))
     return masks
 
 
@@ -340,6 +343,27 @@ def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN")
     return masks
 
 
+def get_strict_prototype_masks(
+        *datas,
+        cat_proj_field="cat_proj",
+        anticat_proj_field="anticat_proj",
+        min_cat_bound=.42,
+        max_cat_bound=.71,
+        ac_bound=.141,
+):
+    masks = []
+    for data in datas:
+        cat = data[cat_proj_field]
+        acat = data[anticat_proj_field]
+        ac_con = (acat > -ac_bound).rs_and(acat < ac_bound)
+        m1 = (cat > min_cat_bound).rs_and(cat < max_cat_bound)
+        m1 = m1.rs_and(ac_con)
+        m2 = (cat > -max_cat_bound).rs_and(cat < -min_cat_bound)
+        m2 = m2.rs_and(ac_con)
+        masks.append((m1, m2))
+    return masks
+
+
 def get_prototype_masks(
     *datas,
     cat_field="stim_sample_MAIN",
@@ -380,5 +404,5 @@ def get_prototype_masks(
             cat2_average,
             sample_radius=sample_radius,
         )
-    masks.append(mask)
+        masks.append(mask)
     return masks

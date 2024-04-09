@@ -24,6 +24,7 @@ def create_parser():
     )
     parser.add_argument("--jobid", default="0000", type=str)
     parser.add_argument("--shape_ind", default=0, type=int)
+    parser.add_argument("--strict_prototype", default=False, action="store_true")
     return parser
 
 
@@ -39,12 +40,10 @@ if __name__ == '__main__':
         ))
     else:
         shape = shapes[args.shape_ind]
-    print(shapes)
-    print(shape)
 
     ss_fig = slf.ShapeSpaceSummary(shape)
     ss_fig.panel_bhv()
-    ss_fig.panel_decoding()
+    ss_fig.panel_decoding(args.strict_prototype)
 
     fname = args.output_template.format(shape=shape, jobid=args.jobid)
     ss_fig.save(fname + ".pdf", use_bf=args.output_folder)

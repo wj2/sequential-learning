@@ -317,9 +317,9 @@ def resample_uniform_performance(
 ):
     corr = data[cho_field][ind] == data[targ_field][ind]
     perf = np.zeros(n_samps)
+    masks = slaux.sample_uniform_mask(data, n_samps=n_samps)[ind]
     for i in range(n_samps):
-        mask = slaux.sample_uniform_mask(data)[ind]
-        perf[i] = np.nanmean(corr[mask])
+        perf[i] = np.nanmean(corr[masks[:, i]])
     return perf
 
 

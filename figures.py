@@ -79,6 +79,7 @@ class SequenceLearningFigure(pu.Figure):
         recompute=False,
         inset=False,
         scatter_bound=(-0.75, 0.75),
+        strict_prototype=False,
     ):
         if plot_gen is None:
             plot_gen = {}
@@ -96,8 +97,13 @@ class SequenceLearningFigure(pu.Figure):
         uniform_resample = self.params.getboolean("uniform_resample")
         if self.data.get(key) is None or recompute:
             data = self.load_shape_data()
-            var_ratio = sla.compute_var_ratio(data)
-            data_session = data.session_mask(var_ratio > var_thr)
+            if not strict_prototype:
+                var_ratio = sla.compute_var_ratio(data)
+                data_session = data.session_mask(var_ratio > var_thr)
+            else:
+                masks = slaux.get_strict_prototype_masks(data)[0]
+                data_session = data.mask(masks)
+                uniform_resample = False
             outs = {}
             for r in regions:
                 args = (data_session, winsize, tbeg, tend, step)
@@ -406,7 +412,7 @@ class ShapeSpaceSummary(SequenceLearningFigure):
                 stim_cat_field="chosen_cat",
             )
 
-    def panel_decoding(self):
+    def panel_decoding(self, **kwargs):
         key = "panel_decoding"
         func_and_name = {
             "category": sla.decode_category,
@@ -420,7 +426,9 @@ class ShapeSpaceSummary(SequenceLearningFigure):
             "non-category generalization": True,
         }
         chance = 0.5
-        self._generic_decoding(key, func_and_name, chance=chance, plot_gen=plot_gen)
+        self._generic_decoding(
+            key, func_and_name, chance=chance, plot_gen=plot_gen, **kwargs
+        )
 
 
 class ContinuousDecodingFigure(SequenceLearningFigure):
