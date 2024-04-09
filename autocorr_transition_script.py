@@ -37,6 +37,7 @@ def create_parser():
     parser.add_argument("--fwid", default=6, type=float)
     parser.add_argument("--no_indiv_zscore", default=False, action="store_true")
     parser.add_argument("--use_binary_feature", default=None, type=int)
+    parser.add_argument("--use_pre_post_data", default=False, action="store_true")    
     return parser
 
 
@@ -51,23 +52,25 @@ if __name__ == "__main__":
                 args.sequence_ind, slaux.shape_sequence
             )
         )
+    elif args.use_pre_post_data:
+        shapes = list(slaux.sequence_groups.values())[args.sequence_ind]
     else:
-        s1 = slaux.shape_sequence[args.sequence_ind]
-        s2 = slaux.shape_sequence[args.sequence_ind + 1]
+        shapes = slaux.shape_sequence[args.sequence_ind:args.sequence_ind + 2]
 
-    data_dict = slaux.load_shape_list((s1, s2))
+    data_dict = slaux.load_shape_list(shapes)
 
+    data_list = list(data_dict.values())
     if args.use_binary_feature is not None:
-        mask_s2, mask_s1 = slaux.get_binary_feature_masks(
-            data_dict[s2], data_dict[s1], feat_ind=args.use_binary_feature
+        masks = slaux.get_binary_feature_masks(
+            *data_list, feat_ind=args.use_binary_feature
         )
         boundary = "feat-{}".format(args.use_binary_feature)
     else:
-        mask_s2, mask_s1 = slaux.get_prototype_masks(data_dict[s2], data_dict[s1])
-        boundary = "proto-{}".format(s2)
+        masks = slaux.get_prototype_masks(*data_list, data_ind=1)
+        boundary = "proto-{}".format(shapes[1])
+    data_mask_pairs = list(zip(data_list, masks))
     out = sla.cross_session_generalization(
-        (data_dict[s1], mask_s1),
-        (data_dict[s2], mask_s2),
+        *data_mask_pairs,
         stepsize=args.winstep,
         winsize=args.winsize,
         tbeg=args.tbeg,
@@ -75,7 +78,7 @@ if __name__ == "__main__":
         indiv_zscore=not args.no_indiv_zscore,
     )
 
-    shape_str = "{}-{}".format(s1, s2)
+    shape_str = "-".join(shapes)
     fn = args.output_template.format(
         shape=shape_str, jobid=args.jobid, boundary=boundary
     )

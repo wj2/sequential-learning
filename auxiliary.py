@@ -339,13 +339,14 @@ def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN")
 
 
 def get_prototype_masks(
-    main_data,
     *datas,
     cat_field="stim_sample_MAIN",
     stim_feat_field="stim_feature_MAIN",
     session_ind=0,
+    data_ind=0,
     sample_radius=100,
 ):
+    main_data = datas[data_ind]
     cat1_mask = main_data[cat_field] == 1
     cat1_stim = main_data.mask(cat1_mask)
     c1_arr = np.stack(cat1_stim[stim_feat_field][session_ind], axis=0)
