@@ -107,7 +107,11 @@ class SequenceLearningFigure(pu.Figure):
             outs = {}
             for r in regions:
                 args = (data_session, winsize, tbeg, tend, step)
-                kwargs_both = {"regions": (r,), "uniform_resample": uniform_resample}
+                kwargs_both = {
+                    "regions": (r,),
+                    "uniform_resample": uniform_resample,
+                    "estimate_performance": True,
+                }
                 kwargs_stim = {}
                 kwargs_sacc = {"time_zero_field": "fp_off"}
                 for k, func in func_and_name.items():
@@ -365,7 +369,7 @@ class ShapeSpaceSummary(SequenceLearningFigure):
         n_plot = int(np.ceil(np.sqrt(n_pts)))
 
         gss = {}
-        task_grid = pu.make_mxn_gridspec(self.gs, n_plot, n_plot, 0, 100, 0, 60, 2, 2)
+        task_grid = pu.make_mxn_gridspec(self.gs, n_plot, n_plot, 0, 80, 0, 60, 2, 2)
         task_ax = self.get_axs(
             task_grid,
             squeeze=True,
@@ -379,7 +383,7 @@ class ShapeSpaceSummary(SequenceLearningFigure):
             5,
             2,
             0,
-            100,
+            80,
             70,
             100,
             5,
@@ -391,7 +395,15 @@ class ShapeSpaceSummary(SequenceLearningFigure):
             sharex="all",
             sharey="all",
         )
+
+        dec_change_grid = pu.make_mxn_gridspec(self.gs, 1, 3, 85, 100, 60, 100, 5, 4)
+        dec_change_axs = self.get_axs(dec_change_grid, squeeze=True)
         gss["panel_decoding"] = dec_axs
+        gss["panel_change_decoding"] = dec_change_axs
+
+        dp_grid = pu.make_mxn_gridspec(self.gs, 1, 3, 85, 100, 0, 40, 5, 4)
+        dprime_axs = self.get_axs(dp_grid, squeeze=True)
+        gss["panel_change_dprime"] = dprime_axs
 
         self.gss = gss
 
@@ -429,6 +441,66 @@ class ShapeSpaceSummary(SequenceLearningFigure):
         self._generic_decoding(
             key, func_and_name, chance=chance, plot_gen=plot_gen, **kwargs
         )
+
+    def panel_change_decoding(self):
+        key_dec = "panel_decoding"
+        key = "panel_change_decoding"
+        if self.data.get(key_dec) is None:
+            self.panel_decoding()
+        dec_dict = self.data[key_dec]
+        axs = self.gss[key]
+        for i, (region, res_dict) in enumerate(dec_dict["category"].items()):
+            cat_dict, xs = res_dict[0]
+            days, corr, metrics = [], [], []
+            for k, out_k in cat_dict.items():
+                days.append(k[0])
+                corr.append(np.nanmean(out_k[-2]))
+                metrics.append(np.nanmean(out_k[0], axis=0))
+            slv.plot_session_change_scatter(
+                xs,
+                metrics,
+                corr,
+                None,
+                mask_var=False,
+                ax=axs[i],
+                cm=self.cm_dict[region],
+            )
+
+    def panel_change_dprime(self):
+        key = "panel_change_dprime"
+        axs = self.gss[key]
+        if self.data.get(key) is None:
+            data = self.load_shape_data()
+            regions = self.params.getlist("use_regions")
+            winsize = self.params.getint("winsize")
+            tbeg = self.params.getint("tbeg")
+            tend = self.params.getint("tend")
+            step = self.params.getint("winstep")
+            uniform_resample = self.params.getboolean("uniform_resample")
+
+            out_dict = {}
+            for r in regions:
+                out_dict[r] = sla.compute_unit_dprime(
+                    data,
+                    winsize,
+                    tbeg,
+                    tend,
+                    step,
+                    regions=(r,),
+                    uniform_resample=uniform_resample,
+                )
+            self.data[key] = out_dict
+        out_dict = self.data[key]
+        for i, (region, (xs, dprime, corr, days)) in enumerate(out_dict.items()):
+            slv.plot_session_change_scatter(
+                xs,
+                dprime,
+                corr,
+                None,
+                mask_var=False,
+                ax=axs[i],
+                cm=self.cm_dict[region],
+            )
 
 
 class ContinuousDecodingFigure(SequenceLearningFigure):
@@ -525,5 +597,10 @@ class DecodingFigure(SequenceLearningFigure):
         }
         chance = 0.5
         self._generic_decoding(
-            key, func_and_name, plot_gen, chance=chance, recompute=recompute, **kwargs,
+            key,
+            func_and_name,
+            plot_gen,
+            chance=chance,
+            recompute=recompute,
+            **kwargs,
         )

@@ -34,8 +34,13 @@ def compute_unit_dprime(
     cat_field="stim_sample_MAIN",
     time_zero_field="stim_on",
     day_field="day",
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    uniform_resample=False,
     **kwargs,
 ):
+    if uniform_resample:
+        data = uniform_sample_mask(data)
     targs = data[cat_field]
     t1_mask = targs == 1
     t2_mask = targs == 2
@@ -49,6 +54,7 @@ def compute_unit_dprime(
     )
     days = data[day_field]
     dprimes = np.zeros((len(days), len(xs)))
+    performance = np.zeros(len(days))
     for i, p1_i in enumerate(pop1):
         p2_i = pop2[i]
         if p1_i.shape[0] > 0:
@@ -57,9 +63,12 @@ def compute_unit_dprime(
             mu2 = np.squeeze(np.mean(p2_i, axis=2))
             sig2 = np.squeeze(np.std(p2_i, axis=2))
             dprimes[i] = np.nanmean(np.abs(mu1 - mu2) / np.sqrt(sig1 * sig2), axis=0)
+            corr = data[cho_field][i] == data[targ_field][i]
+            performance[i] = np.nanmean(corr)
         else:
             dprimes[i] = np.nan
-    return xs, dprimes, days
+            performance[i] = np.nan
+    return xs, dprimes, performance, days
 
 
 def compute_cross_shape_generalization(
@@ -312,13 +321,15 @@ def _generalize_cross_session_decoder(
 
 
 def resample_uniform_performance(
-    data, ind, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000
+    data, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000
 ):
-    corr = data[cho_field][ind] == data[targ_field][ind]
-    perf = np.zeros(n_samps)
-    masks = slaux.sample_uniform_mask(data, n_samps=n_samps)[ind]
-    for i in range(n_samps):
-        perf[i] = np.nanmean(corr[masks[:, i]])
+    corr = data[cho_field] == data[targ_field]
+    perf = np.zeros((len(corr), n_samps))
+    masks = slaux.sample_uniform_mask(data, n_samps=n_samps)
+    for j, corr_j in enumerate(corr):
+        for i in range(n_samps):
+            perf[j, i] = np.nanmean(corr[masks[j][:, i]])
+    perf = perf[np.all(~np.isnan(perf), axis=1)]
     return perf
 
 
@@ -549,7 +560,11 @@ def decode_category(
     *args,
     cat_field="stim_sample_MAIN",
     time_zero_field="stim_on",
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    day_field="day",
     uniform_resample=False,
+    estimate_performance=False,
     **kwargs,
 ):
     if uniform_resample:
@@ -567,6 +582,10 @@ def decode_category(
         decode_tzf=time_zero_field,
         **kwargs,
     )
+    if estimate_performance:
+        corr = data[cho_field] == data[targ_field]
+        days = data[day_field]
+        out = out + (corr, days)
     return _make_out_dict(data, out)
 
 
@@ -661,6 +680,10 @@ def decode_xor(
     time_zero_field="stim_on",
     eps=1e-10,
     uniform_resample=False,
+    estimate_performance=False,
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    day_field="day",
     **kwargs,
 ):
     if uniform_resample:
@@ -720,6 +743,11 @@ def decode_xor(
         decode_tzf=time_zero_field,
         **kwargs,
     )
+    if estimate_performance:
+        corr = data[cho_field] == data[targ_field]
+        days = data[day_field]
+        out = out + (corr, days)
+
     return _make_out_dict(data, out)
 
 
@@ -733,6 +761,10 @@ def generalize_category(
     ortho_category_decode=False,
     ortho_category_generalize=False,
     uniform_resample=False,
+    estimate_performance=False,
+    cho_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    day_field="day",
     thr=0,
     **kwargs,
 ):
@@ -799,6 +831,11 @@ def generalize_category(
         decode_tzf=time_zero_field,
         **kwargs,
     )
+    if estimate_performance:
+        corr = data[cho_field] == data[targ_field]
+        days = data[day_field]
+        out = out + (corr, days)
+
     return _make_out_dict(data, out)
 
 

@@ -8,6 +8,31 @@ import sequential_learning.analysis as sla
 import sequential_learning.auxiliary as slaux
 
 
+@gpl.ax_adder()
+def plot_session_change_scatter(
+    xs,
+    metric,
+    days,
+    data,
+    cm="Blues",
+    var_thr=0.6,
+    ax=None,
+    t_cent=150,
+    mask_var=True,
+):
+    cm = plt.get_cmap(cm)
+    if mask_var:
+        mask = sla.compute_var_ratio(data) > var_thr
+        metric = metric[mask]
+        days = days[mask]
+    colors = cm(np.linspace(0.2, 1, len(metric)))
+    t_ind = np.argmin(np.abs(xs - t_cent))
+
+    for i, metric_i in enumerate(metric):
+        ax.plot(days[i], metric_i[t_ind], "o", color=colors[i])
+        gpl.clean_plot(ax, 0)
+
+
 def plot_session_change(
     xs,
     metric,
@@ -17,12 +42,14 @@ def plot_session_change(
     var_thr=0.6,
     axs=None,
     fwid=2,
-    t_cent=250,
+    t_cent=150,
+    mask_var=True,
 ):
     cm = plt.get_cmap(cm)
-    mask = sla.compute_var_ratio(data) > var_thr
-    metric = metric[mask]
-    days = days[mask]
+    if mask_var:
+        mask = sla.compute_var_ratio(data) > var_thr
+        metric = metric[mask]
+        days = days[mask]
     colors = cm(np.linspace(0.2, 1, len(metric)))
 
     if axs is None:

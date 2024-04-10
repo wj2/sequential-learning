@@ -104,24 +104,29 @@ def sample_uniform_mask(
     for i, cat_i in enumerate(cats):
         anti_cat_i = anti_cats[i]
         sample_pos = np.stack((cat_i, anti_cat_i), axis=1)
+        nan_mask = np.any(
+            np.logical_or(sample_pos < proj_range[0], sample_pos > proj_range[-1]),
+            axis=1,
+        )
+        sample_pos_reduced = sample_pos[~nan_mask]
+        reduced_inds = np.arange(sample_pos.shape[0])[~nan_mask]
 
         counts_distrib, edges, binnumber = sts.binned_statistic_dd(
-            sample_pos,
-            np.ones(len(sample_pos)),
+            sample_pos_reduced,
+            np.ones(len(sample_pos_reduced)),
             statistic="count",
             bins=edges,
         )
-        _, counts_nz = np.unique(binnumber, return_counts=True)
         trl_samps = np.min(counts_distrib)
-        print(counts_distrib)
-        print(edges)
-
         if trl_samps > 1:
             splitter = skms.StratifiedShuffleSplit(
                 n_splits=n_samps,
-                train_size=int(trl_samps) * len(counts_nz),
+                train_size=int(trl_samps) * np.product(counts_distrib.shape),
             )
-            samp_inds = list(tr for tr, _ in splitter.split(sample_pos, binnumber))
+            splitter_gen = splitter.split(sample_pos_reduced, binnumber)
+            samp_inds = list(
+                reduced_inds[tr] for tr, _ in splitter_gen
+            )
             samp_inds = np.stack(samp_inds, axis=0)
         else:
             samp_inds = np.zeros((n_samps, 0))
@@ -334,24 +339,20 @@ def parse_dates(dates):
 def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN"):
     masks = []
     for data in datas:
-        mask1 = list(
-            (np.stack(x, axis=0)[:, feat_ind] > 0) for x in data[feat_field]
-        )
-        mask2 = list(
-            (np.stack(x, axis=0)[:, feat_ind] <= 0) for x in data[feat_field]
-        )
+        mask1 = list((np.stack(x, axis=0)[:, feat_ind] > 0) for x in data[feat_field])
+        mask2 = list((np.stack(x, axis=0)[:, feat_ind] <= 0) for x in data[feat_field])
 
         masks.append((gio.ResultSequence(mask1), gio.ResultSequence(mask2)))
     return masks
 
 
 def get_strict_prototype_masks(
-        *datas,
-        cat_proj_field="cat_proj",
-        anticat_proj_field="anticat_proj",
-        min_cat_bound=.42,
-        max_cat_bound=.71,
-        ac_bound=.141,
+    *datas,
+    cat_proj_field="cat_proj",
+    anticat_proj_field="anticat_proj",
+    min_cat_bound=0.42,
+    max_cat_bound=0.71,
+    ac_bound=0.141,
 ):
     masks = []
     for data in datas:
