@@ -20,7 +20,7 @@ ft1 = (
 )
 ft2 = (
     "A(?P<date>[0-9a-z]+)\\.(?P<shape>A[0-9]+(\\-t)?)\\-d?(?P<day>[0-9]+)"
-    "(\\.postA[0-9]+)?\\.FIRA\\.LMAN_"
+    "(?P<post>\\.postA[0-9]+)?\\.FIRA\\.LMAN_"
     "cat\\.(?P<region>[A-Z0-9+]+)\\.mat"
 )
 file_templates = (ft1, ft2)
@@ -247,7 +247,9 @@ def load_kiani_data_folder(
     file_gen = u.load_folder_regex_generator(folder, *templates, load_func=load_file)
     for fl, fl_info, data_fl in file_gen:
         dates.append(fl_info["date"])
-        shapes.append(fl_info["shape"])
+        shape = fl_info["shape"]
+        shape_add = fl_info.get("post", "")
+        shapes.append(shape + shape_add)
         days.append(int(fl_info["day"]))
         monkeys.append(monkey_name)
 
