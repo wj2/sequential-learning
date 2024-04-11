@@ -249,8 +249,7 @@ def load_kiani_data_folder(
         dates.append(fl_info["date"])
         shape = fl_info["shape"]
         shape_add = fl_info.get("post", "")
-        print(shape, shape_add)
-        shapes.append(shape + shape_add)
+        shapes.append(shape + str(shape_add))
         days.append(int(fl_info["day"]))
         monkeys.append(monkey_name)
 
