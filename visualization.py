@@ -483,18 +483,29 @@ def plot_decoder_autocorrelation(
     ax=None,
     within_shape_color="g",
     across_shape_color="r",
+    related_shape_color="b",
+    cmap="coolwarm",
+    same_cm=.99,
+    first_cm=0,
+    second_cm=0.4,
     t_targ=250,
     chance=0.5,
 ):
+    cm = plt.get_cmap(cmap)
     t_ind = np.argmin(np.abs(xs - t_targ))
     dates = slaux.parse_dates(dates)
     for i, j in u.make_array_ind_iterator(gen_arr.shape):
         x = (dates[j] - dates[i]).days
         y = gen_arr[i, j]
-        if shapes[i] == shapes[j]:
-            color = within_shape_color
+        s_i = shapes[i].strip("None").split(".")
+        s_j = shapes[j].strip("None").split(".")
+        
+        if s_i[0] == s_j[0]:
+            color = cm(same_cm)
+        elif len(s_i) == 1 and len(s_j) == 1:
+            color = cm(first_cm)
         else:
-            color = across_shape_color
+            color = cm(second_cm)
         gpl.plot_trace_werr(
             [x],
             np.expand_dims(y[:, t_ind], 1),
