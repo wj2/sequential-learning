@@ -305,10 +305,21 @@ def _generalize_cross_session_decoder(
         kwargs["norm"] = False
 
     out_gen = np.zeros((len(pops1), len(pops2)), dtype=object)
+    out_var = np.zeros((len(pops1), len(pops2)), dtype=object)
     for i, p1_i in enumerate(pops1):
         p2_i = pops2[i]
-        out = na.fold_skl(p1_i, p2_i, n_folds, mean=False, model=model, **kwargs)
+        out = na.fold_skl(
+            p1_i,
+            p2_i,
+            n_folds,
+            mean=False,
+            model=model,
+            return_projection=True,
+            **kwargs,
+        )
         out_gen[i, i] = out["score"]
+        out_var[i, i] = np.var(out["projection"], axis=-1)
+        
         for j, p1_j in enumerate(pops1):
             p2_j = pops2[j]
             if i != j:
@@ -317,7 +328,13 @@ def _generalize_cross_session_decoder(
                     p1_j,
                     p2_j,
                 )
-    return shapes, dates, out_gen
+                var_ij = na.project_on_estimators_discrete(
+                    out["estimators"],
+                    p1_j,
+                    p2_j,
+                )
+                out_var[i, j] = np.var(var_ij, axis=-1)
+    return shapes, dates, out_gen, out_var
 
 
 def resample_uniform_performance(
@@ -365,8 +382,8 @@ def cross_session_generalization(
         n_folds=n_folds,
         **kwargs,
     )
-    shapes, dates, gen_arr = out
-    return shapes, dates, xs, gen_arr
+    shapes, dates, gen_arr, gen_var = out
+    return shapes, dates, xs, gen_arr, gen_var
 
 
 def cross_data_generalization(

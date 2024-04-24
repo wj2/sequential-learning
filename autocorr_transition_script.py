@@ -83,9 +83,13 @@ if __name__ == "__main__":
         shape=shape_str, jobid=args.jobid, boundary=boundary
     )
     path = os.path.join(args.output_folder, fn)
-    out_dict = {"args": vars(args), "gen": out}
+    info = out[:3]
+    gen = out[3]
+    var = out[4]
+    out_dict = {"args": vars(args), "info": info, "gen": gen, "var": var}
     pickle.dump(out_dict, open(path + ".pkl", "wb"))
 
-    f, ax = plt.subplots(1, 1, figsize=(args.fwid, args.fwid))
-    slv.plot_decoder_autocorrelation(*out, ax=ax)
+    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(args.fwid, 2*args.fwid))
+    slv.plot_decoder_autocorrelation(*info, gen, ax=ax1)
+    slv.plot_decoder_autocorrelation(*info, var, ax=ax2)
     f.savefig(path + ".pdf", bbox_inches="tight", transparent=True)
