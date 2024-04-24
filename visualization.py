@@ -490,6 +490,7 @@ def plot_decoder_autocorrelation(
     second_cm=0.4,
     t_targ=250,
     chance=0.5,
+    normalize=False,
 ):
     cm = plt.get_cmap(cmap)
     t_ind = np.argmin(np.abs(xs - t_targ))
@@ -497,6 +498,8 @@ def plot_decoder_autocorrelation(
     for i, j in u.make_array_ind_iterator(gen_arr.shape):
         x = (dates[j] - dates[i]).days
         y = gen_arr[i, j]
+        if normalize:
+            y = y / gen_arr[i, i]
         s_i = shapes[i].strip("None").split(".")
         s_j = shapes[j].strip("None").split(".")
         
