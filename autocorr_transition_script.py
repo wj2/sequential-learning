@@ -37,7 +37,7 @@ def create_parser():
     parser.add_argument("--fwid", default=6, type=float)
     parser.add_argument("--no_indiv_zscore", default=False, action="store_true")
     parser.add_argument("--use_binary_feature", default=None, type=int)
-    parser.add_argument("--use_pre_post_data", default=False, action="store_true")    
+    parser.add_argument("--use_pre_post_data", default=False, action="store_true")
     return parser
 
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     elif args.use_pre_post_data:
         shapes = list(slaux.sequence_groups.values())[args.sequence_ind]
     else:
-        shapes = slaux.shape_sequence[args.sequence_ind:args.sequence_ind + 2]
+        shapes = slaux.shape_sequence[args.sequence_ind : args.sequence_ind + 2]
 
     data_dict = slaux.load_shape_list(shapes)
 
@@ -89,7 +89,11 @@ if __name__ == "__main__":
     out_dict = {"args": vars(args), "info": info, "gen": gen, "var": var}
     pickle.dump(out_dict, open(path + ".pkl", "wb"))
 
-    f, _ = slv.plot_decoder_autocorrelation_full(*info, gen, normalize=False)
+    f, _ = slv.plot_decoder_autocorrelation_full(
+        *info, gen, fwid=args.fwid, normalize=False
+    )
     f.savefig(path + "_gen.pdf", bbox_inches="tight", transparent=True)
-    f, _ = slv.plot_decoder_autocorrelation_full(*info, var, normalize=True)
+    f, _ = slv.plot_decoder_autocorrelation_full(
+        *info, var, fwid=args.fwid, normalize=True
+    )
     f.savefig(path + "_var.pdf", bbox_inches="tight", transparent=True)
