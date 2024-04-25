@@ -89,7 +89,7 @@ if __name__ == "__main__":
     out_dict = {"args": vars(args), "info": info, "gen": gen, "var": var}
     pickle.dump(out_dict, open(path + ".pkl", "wb"))
 
-    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(2*args.fwid, args.fwid))
-    slv.plot_decoder_autocorrelation(*info, gen, ax=ax1, normalize=False)
-    slv.plot_decoder_autocorrelation(*info, var, ax=ax2, normalize=True)
-    f.savefig(path + ".pdf", bbox_inches="tight", transparent=True)
+    f, _ = slv.plot_decoder_autocorrelation_full(*info, gen, normalize=False)
+    f.savefig(path + "_gen.pdf", bbox_inches="tight", transparent=True)
+    f, _ = slv.plot_decoder_autocorrelation_full(*info, var, normalize=True)
+    f.savefig(path + "_var.pdf", bbox_inches="tight", transparent=True)

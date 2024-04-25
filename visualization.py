@@ -474,6 +474,67 @@ def plot_session_rfs(feats, pop, min_trls=5, axs=None, fwid=1, cmap="Blues"):
     return axs
 
 
+def plot_decoder_autocorrelation_full(
+    shapes,
+    dates,
+    xs,
+    gen_arr,
+    axs=None,
+    cmap="coolwarm",
+    s1_cm=0,
+    s2_cm=1.0,
+    t_targ=250,
+    chance=0.5,
+    normalize=False,
+    fwid=3,
+):
+    shapes = np.array(shapes)
+    cm = plt.get_cmap(cmap)
+    t_ind = np.argmin(np.abs(xs - t_targ))
+    dates = slaux.parse_dates(dates)
+    _, inds = np.unique(shapes, return_index=True)
+    u_shapes = shapes[np.sort(inds)]
+    shapes_nice = list(s.strip("None").split(".") for s in u_shapes)
+    colors = (cm(s1_cm), cm(s2_cm), cm(s1_cm))
+    if axs is None:
+        n_sh = len(u_shapes)
+        f, axs = plt.subplots(
+            n_sh, n_sh, figsize=(n_sh * fwid, n_sh * fwid), sharey=True
+        )
+    else:
+        f = None
+    for i, j in it.product(range(n_sh), repeat=2):
+        sh_i = u_shapes[i]
+        sh_j = u_shapes[j]
+
+        if i == 0:
+            axs[i, j].set_title(shapes_nice[j][0])
+        row_mask = shapes == sh_i
+        col_mask = shapes == sh_j
+        sub_arr = gen_arr[row_mask][:, col_mask]
+        sub_arr_ii = gen_arr[row_mask][:, row_mask]
+        dates_i = dates[row_mask]
+        dates_j = dates[col_mask]
+        for ai, aj in u.make_array_ind_iterator(sub_arr.shape):
+            x = (dates_j[aj] - dates_i[ai]).days
+            y = sub_arr[ai, aj]
+            if normalize:
+                y = y / sub_arr_ii[ai, ai]
+            gpl.plot_trace_werr(
+                [x],
+                np.expand_dims(y[:, t_ind], 1),
+                ax=axs[i, j],
+                fill=False,
+                color=colors[j],
+                confstd=True,
+                points=True,
+            )
+        gpl.add_hlines(chance, axs[i, j])
+        axs[i, j].set_xlabel("day difference")
+        axs[i, j].set_ylabel("generalization performance")
+    return f, axs
+
+
 @gpl.ax_adder()
 def plot_decoder_autocorrelation(
     shapes,
@@ -481,11 +542,8 @@ def plot_decoder_autocorrelation(
     xs,
     gen_arr,
     ax=None,
-    within_shape_color="g",
-    across_shape_color="r",
-    related_shape_color="b",
     cmap="coolwarm",
-    same_cm=.99,
+    same_cm=0.99,
     first_cm=0,
     second_cm=0.4,
     t_targ=250,
@@ -502,7 +560,7 @@ def plot_decoder_autocorrelation(
             y = y / gen_arr[i, i]
         s_i = shapes[i].strip("None").split(".")
         s_j = shapes[j].strip("None").split(".")
-        
+
         if s_i[0] == s_j[0]:
             color = cm(same_cm)
         elif len(s_i) == 1 and len(s_j) == 1:
