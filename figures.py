@@ -371,9 +371,8 @@ class SpecificTransitionFigure(SequenceLearningFigure):
             self.gs, self.n_sh + 1, self.n_sh, 0, 100, 55, 100, 5, 2
         )
 
-        
         gen_tr_axs = self.get_axs(
-            gen_grid[:self.n_sh],
+            gen_grid[: self.n_sh],
             squeeze=True,
             sharey="all",
         )
@@ -384,7 +383,7 @@ class SpecificTransitionFigure(SequenceLearningFigure):
         gss["panel_gen"] = (gen_tr_axs, gen_map_ax)
 
         var_tr_axs = self.get_axs(
-            var_grid[:self.n_sh],
+            var_grid[: self.n_sh],
             squeeze=True,
             sharey="all",
         )
@@ -407,7 +406,9 @@ class SpecificTransitionFigure(SequenceLearningFigure):
 
     def panel_var(self):
         key = "panel_var"
-        self._plot_tr_map(self.var, key, normalize=True, chance=None)
+        self._plot_tr_map(
+            self.var, key, normalize=True, chance=None, y_label="shared variance"
+        )
 
 
 class ShapeSpaceSummary(SequenceLearningFigure):

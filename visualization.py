@@ -539,6 +539,7 @@ def plot_decoder_autocorrelation_full(
     normalize=False,
     c_range=(.3, .9),
     fwid=3,
+    y_label="generalization performance",
 ):
     shapes = np.array(shapes)
     t_ind = np.argmin(np.abs(xs - t_targ))
@@ -592,7 +593,7 @@ def plot_decoder_autocorrelation_full(
             gpl.add_hlines(chance, axs[i, j])
         axs[i, j].set_xlabel("day difference")
         if j == 0:
-            axs[i, j].set_ylabel("generalization performance")
+            axs[i, j].set_ylabel(y_label)
         gpl.clean_plot(axs[i, j], j)
     return f, axs
 
