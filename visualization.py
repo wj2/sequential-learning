@@ -474,28 +474,80 @@ def plot_session_rfs(feats, pop, min_trls=5, axs=None, fwid=1, cmap="Blues"):
     return axs
 
 
+@gpl.ax_adder()
+def plot_decoder_autocorrelation_map(
+    shapes,
+    dates,
+    xs,
+    gen_arr,
+    ax=None,
+    s1_cmap="Blues",
+    s2_cmap="Reds",
+    heat_cmap="Greys",
+    t_targ=250,
+    chance=0.5,
+    normalize=False,
+    c_use=.8,
+    fwid=3,        
+):
+    shapes = np.array(shapes)
+    t_ind = np.argmin(np.abs(xs - t_targ))
+    dates = slaux.parse_dates(dates)
+    _, inds = np.unique(shapes, return_index=True)
+    u_shapes = shapes[np.sort(inds)]
+    
+    cmaps = (plt.get_cmap(s1_cmap), plt.get_cmap(s2_cmap), plt.get_cmap(s1_cmap))
+    colors = list(cm(c_use) for cm in cmaps)
+    plot_arr = np.zeros(gen_arr.shape)
+    for i, j in u.make_array_ind_iterator(gen_arr.shape):
+        y = gen_arr[i, j]
+        if normalize:
+            y = y / gen_arr[i, i]
+        y_mu = np.mean(y[:, t_ind])
+        plot_arr[i, j] = y_mu
+    days = (dates - min(dates)).days
+    u_ticks = np.arange(len(dates))
+    gpl.pcolormesh(u_ticks, u_ticks, plot_arr, cmap=heat_cmap, ax=ax)
+    ax.set_xticks(u_ticks[::10])
+    ax.set_xticklabels(days[::10])
+    ax.set_yticks(u_ticks[::10])
+    ax.set_yticklabels(days[::10])
+    for i, us in enumerate(u_shapes):
+        match_inds = np.where(us == shapes)[0]
+        start, end = match_inds[0], match_inds[-1]
+        ax.hlines(-1, u_ticks[start], u_ticks[end], color=colors[i])
+        ax.vlines(u_ticks[-1] + 1, u_ticks[start], u_ticks[end], color=colors[i])
+    gpl.clean_plot(ax, 0)
+    ax.spines["left"].set_visible(False)
+    ax.spines["bottom"].set_visible(False)
+    ax.invert_yaxis()
+    ax.set_xlabel("trained day")
+    ax.set_ylabel("tested day")
+    ax.set_aspect("equal")
+
+
 def plot_decoder_autocorrelation_full(
     shapes,
     dates,
     xs,
     gen_arr,
     axs=None,
-    cmap="coolwarm",
-    s1_cm=0,
-    s2_cm=1.0,
+    s1_cmap="Blues",
+    s2_cmap="Reds",
     t_targ=250,
     chance=0.5,
     normalize=False,
+    c_range=(.3, .9),
     fwid=3,
 ):
     shapes = np.array(shapes)
-    cm = plt.get_cmap(cmap)
     t_ind = np.argmin(np.abs(xs - t_targ))
     dates = slaux.parse_dates(dates)
     _, inds = np.unique(shapes, return_index=True)
     u_shapes = shapes[np.sort(inds)]
     shapes_nice = list(s.strip("None").split(".") for s in u_shapes)
-    colors = (cm(s1_cm), cm(s2_cm), cm(s1_cm))
+    
+    cmaps = (plt.get_cmap(s1_cmap), plt.get_cmap(s2_cmap), plt.get_cmap(s1_cmap))
     if axs is None:
         n_sh = len(u_shapes)
         f, axs = plt.subplots(
@@ -503,6 +555,7 @@ def plot_decoder_autocorrelation_full(
         )
     else:
         f = None
+        n_sh = axs.shape[0]
     for i, j in it.product(range(n_sh), repeat=2):
         sh_i = u_shapes[i]
         sh_j = u_shapes[j]
@@ -515,8 +568,14 @@ def plot_decoder_autocorrelation_full(
         sub_arr_ii = gen_arr[row_mask][:, row_mask]
         dates_i = dates[row_mask]
         dates_j = dates[col_mask]
+        min_date = min(dates_j)
+        num_days = (max(dates_j) - min_date).days + 1
         for ai, aj in u.make_array_ind_iterator(sub_arr.shape):
             x = (dates_j[aj] - dates_i[ai]).days
+            date_prog = (dates_j[aj] - min_date).days / num_days
+            
+            date_prog_norm = date_prog * (c_range[1] - c_range[0]) + c_range[0]
+            color = cmaps[j](date_prog_norm)
             y = sub_arr[ai, aj]
             if normalize:
                 y = y / sub_arr_ii[ai, ai]
@@ -525,13 +584,16 @@ def plot_decoder_autocorrelation_full(
                 np.expand_dims(y[:, t_ind], 1),
                 ax=axs[i, j],
                 fill=False,
-                color=colors[j],
+                color=color,
                 confstd=True,
                 points=True,
             )
-        gpl.add_hlines(chance, axs[i, j])
+        if chance is not None:
+            gpl.add_hlines(chance, axs[i, j])
         axs[i, j].set_xlabel("day difference")
-        axs[i, j].set_ylabel("generalization performance")
+        if j == 0:
+            axs[i, j].set_ylabel("generalization performance")
+        gpl.clean_plot(axs[i, j], j)
     return f, axs
 
 

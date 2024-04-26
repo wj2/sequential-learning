@@ -7,6 +7,7 @@ import os
 import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
 import sequential_learning.visualization as slv
+import sequential_learning.figures as slf
 
 
 def create_parser():
@@ -89,11 +90,7 @@ if __name__ == "__main__":
     out_dict = {"args": vars(args), "info": info, "gen": gen, "var": var}
     pickle.dump(out_dict, open(path + ".pkl", "wb"))
 
-    f, _ = slv.plot_decoder_autocorrelation_full(
-        *info, gen, fwid=args.fwid, normalize=False
-    )
-    f.savefig(path + "_gen.pdf", bbox_inches="tight", transparent=True)
-    f, _ = slv.plot_decoder_autocorrelation_full(
-        *info, var, fwid=args.fwid, normalize=True
-    )
-    f.savefig(path + "_var.pdf", bbox_inches="tight", transparent=True)
+    f = slf.SpecificTransitionFigure(info, gen, var)
+    f.panel_var()
+    f.panel_gen()    
+    f.save(path + ".pdf")

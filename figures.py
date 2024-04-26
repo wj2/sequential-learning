@@ -337,6 +337,79 @@ class BehaviorSequenceSummary(SequenceLearningFigure):
             )
 
 
+class SpecificTransitionFigure(SequenceLearningFigure):
+    def __init__(
+        self,
+        info,
+        gen,
+        var,
+        fig_key="specific_transition_figure",
+        fwid=3,
+        colors=colors,
+        exper_data=None,
+        **kwargs,
+    ):
+        self.n_sh = len(np.unique(info[0]))
+        fsize = (self.n_sh * 2 * fwid, self.n_sh * fwid + fwid)
+        self.info = info
+        self.gen = gen
+        self.var = var
+
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        super().__init__(fsize, params, colors=colors, **kwargs)
+
+    def make_gss(self):
+        gss = {}
+
+        gen_grid = pu.make_mxn_gridspec(
+            self.gs, self.n_sh + 1, self.n_sh, 0, 100, 0, 45, 5, 2
+        )
+        var_grid = pu.make_mxn_gridspec(
+            self.gs, self.n_sh + 1, self.n_sh, 0, 100, 55, 100, 5, 2
+        )
+
+        
+        gen_tr_axs = self.get_axs(
+            gen_grid[:self.n_sh],
+            squeeze=True,
+            sharey="all",
+        )
+        gen_map_ax = self.get_axs(
+            gen_grid[-1:, 1],
+            squeeze=False,
+        )[0, 0]
+        gss["panel_gen"] = (gen_tr_axs, gen_map_ax)
+
+        var_tr_axs = self.get_axs(
+            var_grid[:self.n_sh],
+            squeeze=True,
+            sharey="all",
+        )
+        var_map_ax = self.get_axs(
+            var_grid[-1:, 1],
+            squeeze=False,
+        )[0, 0]
+        gss["panel_var"] = (var_tr_axs, var_map_ax)
+
+        self.gss = gss
+
+    def _plot_tr_map(self, quant, key, **kwargs):
+        tr_axs, map_ax = self.gss[key]
+        slv.plot_decoder_autocorrelation_full(*self.info, quant, axs=tr_axs, **kwargs)
+        slv.plot_decoder_autocorrelation_map(*self.info, quant, ax=map_ax, **kwargs)
+
+    def panel_gen(self):
+        key = "panel_gen"
+        self._plot_tr_map(self.gen, key)
+
+    def panel_var(self):
+        key = "panel_var"
+        self._plot_tr_map(self.var, key, normalize=True, chance=None)
+
+
 class ShapeSpaceSummary(SequenceLearningFigure):
     def __init__(
         self,
