@@ -93,4 +93,4 @@ if __name__ == "__main__":
     f = slf.SpecificTransitionFigure(info, gen, var)
     f.panel_var()
     f.panel_gen()    
-    f.save(path + ".pdf")
+    f.save(path + ".pdf", use_bf="")
