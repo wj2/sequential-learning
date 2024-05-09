@@ -15,7 +15,7 @@ CONFIG_PATH = "sequential_learning/config.conf"
 cf = u.ConfigParserColor()
 cf.read(CONFIG_PATH)
 
-BASEFOLDER = cf.get("DEFAULT", "BASEFOLDER", "../data/sequential_learning/")
+BASEFOLDER = cf.get("DEFAULT", "BASEFOLDER", fallback="../data/sequential_learning/")
 
 
 ft1 = (
