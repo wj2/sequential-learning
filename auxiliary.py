@@ -11,7 +11,11 @@ import general.utility as u
 import general.data_io as gio
 
 
-BASEFOLDER = "../data/sequential_learning/data/"
+CONFIG_PATH = "sequential_learning/config.conf"
+cf = u.ConfigParserColor()
+cf.read(CONFIG_PATH)
+
+BASEFOLDER = cf.get("DEFAULT", "BASEFOLDER")
 
 
 ft1 = (
@@ -60,6 +64,22 @@ shape_sequence = (
     "A10",
     "A10t",
 )
+
+
+def get_boundary_angles(shapes=None, data_folder=BASEFOLDER, **kwargs):
+    if shapes is None:
+        shapes = shape_sequence
+    angle_dict = {}
+    for shape in shapes:
+        folder = os.path.join(data_folder, shape)
+        out = load_kiani_data_folder(folder, max_files=1, **kwargs)
+        cd = out["data"][0]["cat_def_MAIN"].iloc[0]
+        angle_dict[shape] = cd
+    return angle_dict
+        
+
+def get_num_sessions():
+    pass
 
 
 def load_shape_list(
@@ -285,7 +305,7 @@ def load_kiani_data_folder(
         datas.append(data_fl_pd)
         n_neurs.append(n_neur_fl)
         files_loaded += 1
-        if files_loaded > max_files:
+        if files_loaded >= max_files:
             break
     super_dict = dict(
         date=dates,
