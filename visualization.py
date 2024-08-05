@@ -488,7 +488,8 @@ def plot_decoder_autocorrelation_map(
     chance=0.5,
     normalize=False,
     c_use=.8,
-    fwid=3,        
+    fwid=3,
+    y_label="",
 ):
     shapes = np.array(shapes)
     t_ind = np.argmin(np.abs(xs - t_targ))
