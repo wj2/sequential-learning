@@ -481,13 +481,12 @@ def plot_decoder_autocorrelation_map(
     xs,
     gen_arr,
     ax=None,
-    s1_cmap="Blues",
-    s2_cmap="Reds",
+    use_cmaps=("Blues", "Reds", "Greens", "Purples", "Oranges"),    
     heat_cmap="Greys",
     t_targ=250,
     chance=0.5,
     normalize=False,
-    c_use=.8,
+    c_use=0.8,
     fwid=3,
     y_label="",
 ):
@@ -496,8 +495,17 @@ def plot_decoder_autocorrelation_map(
     dates = slaux.parse_dates(dates)
     _, inds = np.unique(shapes, return_index=True)
     u_shapes = shapes[np.sort(inds)]
-    
-    cmaps = (plt.get_cmap(s1_cmap), plt.get_cmap(s2_cmap), plt.get_cmap(s1_cmap))
+
+    shapes_nice = list(s.strip("None").split(".") for s in u_shapes)
+
+    set_colors = {}
+    cmaps = []
+    for i, sn in enumerate(shapes_nice):
+        s = sn[0]
+        cmap = set_colors.get(s, use_cmaps[len(set_colors) % len(use_cmaps)])
+        set_colors[s] = cmap
+        cmaps.append(plt.get_cmap(cmap))
+
     colors = list(cm(c_use) for cm in cmaps)
     plot_arr = np.zeros(gen_arr.shape)
     for i, j in u.make_array_ind_iterator(gen_arr.shape):
@@ -533,12 +541,11 @@ def plot_decoder_autocorrelation_full(
     xs,
     gen_arr,
     axs=None,
-    s1_cmap="Blues",
-    s2_cmap="Reds",
+    use_cmaps=("Blues", "Reds", "Greens", "Purples", "Oranges"),
     t_targ=250,
     chance=0.5,
     normalize=False,
-    c_range=(.3, .9),
+    c_range=(0.3, 0.9),
     fwid=3,
     y_label="generalization performance",
 ):
@@ -548,8 +555,14 @@ def plot_decoder_autocorrelation_full(
     _, inds = np.unique(shapes, return_index=True)
     u_shapes = shapes[np.sort(inds)]
     shapes_nice = list(s.strip("None").split(".") for s in u_shapes)
-    
-    cmaps = (plt.get_cmap(s1_cmap), plt.get_cmap(s2_cmap), plt.get_cmap(s1_cmap))
+
+    set_colors = {}
+    cmaps = []
+    for i, sn in enumerate(shapes_nice):
+        s = sn[0]
+        cmap = set_colors.get(s, use_cmaps[len(set_colors) % len(use_cmaps)])
+        set_colors[s] = cmap
+        cmaps.append(plt.get_cmap(cmap))
     if axs is None:
         n_sh = len(u_shapes)
         f, axs = plt.subplots(
@@ -575,7 +588,7 @@ def plot_decoder_autocorrelation_full(
         for ai, aj in u.make_array_ind_iterator(sub_arr.shape):
             x = (dates_j[aj] - dates_i[ai]).days
             date_prog = (dates_j[aj] - min_date).days / num_days
-            
+
             date_prog_norm = date_prog * (c_range[1] - c_range[0]) + c_range[0]
             color = cmaps[j](date_prog_norm)
             y = sub_arr[ai, aj]

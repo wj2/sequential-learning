@@ -40,6 +40,7 @@ def create_parser():
     parser.add_argument("--use_binary_feature", default=None, type=int)
     parser.add_argument("--use_pre_post_data", default=False, action="store_true")
     parser.add_argument("--sequence_length", default=2, type=int)
+    parser.add_argument("--region", default="IT")
     return parser
 
 
@@ -80,6 +81,7 @@ if __name__ == "__main__":
         tbeg=args.tbeg,
         tend=args.tend,
         indiv_zscore=not args.no_indiv_zscore,
+        region=args.region,
     )
 
     shape_str = "-".join(shapes)
