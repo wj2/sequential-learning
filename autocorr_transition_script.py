@@ -39,6 +39,7 @@ def create_parser():
     parser.add_argument("--no_indiv_zscore", default=False, action="store_true")
     parser.add_argument("--use_binary_feature", default=None, type=int)
     parser.add_argument("--use_pre_post_data", default=False, action="store_true")
+    parser.add_argument("--sequence_length", default=2, type=int)
     return parser
 
 
@@ -56,7 +57,9 @@ if __name__ == "__main__":
     elif args.use_pre_post_data:
         shapes = list(slaux.sequence_groups.values())[args.sequence_ind]
     else:
-        shapes = slaux.shape_sequence[args.sequence_ind : args.sequence_ind + 2]
+        seq_start = args.sequence_ind
+        seq_end = args.sequence_ind + args.sequence_length
+        shapes = slaux.shape_sequence[seq_start : seq_end]
 
     data_dict = slaux.load_shape_list(shapes)
 
