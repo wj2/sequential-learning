@@ -66,10 +66,16 @@ if __name__ == "__main__":
 
     data_list = list(data_dict.values())
     if args.use_binary_feature is not None:
+        if args.use_screen_feature:
+            feat_field = "stim_feature_screen"
+            feat_str = "screenfeat"
+        else:
+            feat_field = "stim_feature_MAIN"
+            feat_str = "feat"
         masks = slaux.get_binary_feature_masks(
-            *data_list, feat_ind=args.use_binary_feature
+            *data_list, feat_ind=args.use_binary_feature, feat_field=feat_field,
         )
-        boundary = "feat-{}".format(args.use_binary_feature)
+        boundary = "{}-{}".format(feat_str, args.use_binary_feature)
     else:
         masks = slaux.get_prototype_masks(*data_list, data_ind=1)
         boundary = "proto-{}".format(shapes[1])

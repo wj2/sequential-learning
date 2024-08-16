@@ -76,7 +76,7 @@ def get_boundary_angles(shapes=None, data_folder=BASEFOLDER, **kwargs):
         cd = out["data"][0]["cat_def_MAIN"].iloc[0]
         angle_dict[shape] = cd
     return angle_dict
-        
+
 
 def get_num_sessions():
     pass
@@ -144,9 +144,7 @@ def sample_uniform_mask(
                 train_size=int(trl_samps) * np.product(counts_distrib.shape),
             )
             splitter_gen = splitter.split(sample_pos_reduced, binnumber)
-            samp_inds = list(
-                reduced_inds[tr] for tr, _ in splitter_gen
-            )
+            samp_inds = list(reduced_inds[tr] for tr, _ in splitter_gen)
             samp_inds = np.stack(samp_inds, axis=0)
         else:
             samp_inds = np.zeros((n_samps, 0))
@@ -254,7 +252,11 @@ def _get_projs(
 
 
 def load_kiani_data_folder(
-    folder, templates=file_templates, monkey_name="Z", max_files=np.inf
+    folder,
+    templates=file_templates,
+    monkey_name="Z",
+    max_files=np.inf,
+    center_pt=(-2, -2),
 ):
     datas = []
     n_neurs = []
@@ -265,6 +267,7 @@ def load_kiani_data_folder(
 
     files_loaded = 0
     file_gen = u.load_folder_regex_generator(folder, *templates, load_func=load_file)
+    center_pt = np.expand_dims(center_pt, 0)
     for fl, fl_info, data_fl in file_gen:
         dates.append(fl_info["date"])
         shape = fl_info["shape"]
@@ -292,6 +295,34 @@ def load_kiani_data_folder(
         opp_cats[cats == 2] = 1
         corr_targ = data_fl["targ_cor"]
         cho_targ = data_fl["targ_cho"]
+        if "stim_aperture" in data_fl.keys():
+            pos = np.stack(list(tuple(x) for x in data_fl["stim_aperture"]), axis=0)
+            uv = u.make_unit_vector(pos[:, :2] - center_pt)
+            ang = np.arctan2(uv[:, 1], uv[:, 0]) - np.arctan2(0, 1)
+            rot = np.array([[np.cos(ang), -np.sin(ang)], [np.sin(ang), np.cos(ang)]])
+            feats = np.stack(
+                list(tuple(x) for x in data_fl["stim_feature_MAIN"]), axis=0
+            )
+            cd_vec = u.radian_to_sincos(np.radians(data_fl["cat_def_MAIN"]))
+            new_vec = np.array(
+                list(tuple(cd_i @ rot[..., i]) for i, cd_i in enumerate(cd_vec))
+            )
+            new_cat_def = np.degrees(u.sincos_to_radian(new_vec[:, 0], new_vec[:, 1]))
+
+            new_feats = list(tuple(fi @ rot[..., i]) for i, fi in enumerate(feats))
+            data_fl_pd["screen_angle"] = ang
+            data_fl_pd["stim_feature_screen"] = new_feats
+            data_fl_pd["feature_vector"] = list(tuple(x) for x in uv)
+            data_fl_pd["cat_def_screen"] = new_cat_def
+        else:
+            fv = np.zeros((len(cats), 2))
+            cd = np.zeros(len(cats))
+            fv[:] = np.nan
+            data_fl_pd["feature_vector"] = list(tuple(x) for x in fv)
+            data_fl_pd["stim_feature_screen"] = list(tuple(x) for x in fv)
+            data_fl_pd["cat_def_screen"] = cd
+            data_fl_pd["screen_angle"] = cd
+            
         choices = np.zeros_like(cats)
         choices[:] = np.nan
         mask_corr = corr_targ == cho_targ

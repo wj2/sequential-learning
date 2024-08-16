@@ -17,6 +17,17 @@ def uniform_sample_mask(data, **kwargs):
     return data
 
 
+def find_positions(data_dict, pos_key="stim_aperture"):
+    pos_dict = {}
+    for shape, shape_data in data_dict.items():
+        if pos_key in shape_data.session_keys:
+            pos_cat = np.concatenate(shape_data[pos_key])
+            u_pos = np.unique(list(tuple(x) for x in pos_cat), axis=0)
+            pos_dict[shape] = u_pos
+            
+    return pos_dict
+
+
 def stack_features(feats, ind=None, div=1000):
     stacked_feats = []
     if ind is not None:
