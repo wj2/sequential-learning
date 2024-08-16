@@ -41,6 +41,8 @@ def create_parser():
     parser.add_argument("--use_pre_post_data", default=False, action="store_true")
     parser.add_argument("--sequence_length", default=2, type=int)
     parser.add_argument("--region", default="IT")
+    parser.add_argument("--use_screen_feature", default=False, action="store_true")
+    
     return parser
 
 
