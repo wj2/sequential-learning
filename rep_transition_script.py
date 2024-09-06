@@ -4,7 +4,6 @@ from datetime import datetime
 import os
 
 import sequential_learning.auxiliary as slaux
-import sequential_learning.analysis as sla
 import sequential_learning.figures as slf
 
 
@@ -67,7 +66,7 @@ if __name__ == "__main__":
     fig.panel_bhv_learning()
 
     shape_str = "-".join(shapes)
-    fn = args.out_template.format(shape=shape_str, jobid=args.jobid)
+    fn = args.output_template.format(shape=shape_str, jobid=args.jobid)
     path = os.path.join(args.output_folder, fn)
     fig.save(path + ".pdf", use_bf="")
     analysis_results = fig.get_data()["main_analysis"]
