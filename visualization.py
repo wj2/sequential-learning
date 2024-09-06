@@ -2,6 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import itertools as it
 
+import sklearn.decomposition as skd
+import sklearn.linear_model as sklm
+
 import general.plotting as gpl
 import general.utility as u
 import sequential_learning.analysis as sla
@@ -109,6 +112,290 @@ def plot_session_average(
             corr[:, i] = u.bootstrap_list(perf, np.nanmean, n_boots)
     gpl.plot_trace_werr(days, corr, ax=ax, conf95=True, **kwargs)
     gpl.add_hlines(0.5, ax)
+
+
+def compute_basis(basis_vecs):
+    bv_all = np.concatenate(basis_vecs, axis=-1)
+    basis, _ = np.linalg.qr(bv_all)
+    return basis
+
+
+def plot_all_cross_projections(*dvs, cmaps=None, color_bounds=(0.2, 0.9), **kwargs):
+    n_dvs = len(dvs)
+    if cmaps is None:
+        cmaps = ("Blues", "Greens", "Reds")
+    cmaps = list(plt.get_cmap(x) for x in cmaps)
+    axs = kwargs.pop("axs", None)
+    for i, dv in enumerate(dvs):
+        ref_inds_base = (None,) * i
+        colors = cmaps[i](np.linspace(*color_bounds, len(dv)))
+        for j, dv_j in enumerate(dv):
+            ref_inds_use = ref_inds_base + (j,) + (None,) * (n_dvs - i - 1)
+            axs = plot_cross_projection(
+                *dvs, ref_inds=ref_inds_use, axs=axs, color=colors[j], **kwargs
+            )
+
+
+def plot_cross_projection(*dvs, ref_inds=None, axs=None, fwid=3, t_ind=0, **kwargs):
+    if axs is None:
+        n = len(dvs)
+        f, axs = plt.subplots(n, n, figsize=(n * fwid, n * fwid), sharey=True)
+    if ref_inds is None:
+        ref_inds = (-1,) * len(dvs)
+    sims_all = {}
+    for i, dv_i in enumerate(dvs):
+        if ref_inds[i] is not None:
+            dv_ref = dv_i[ref_inds[i]]
+            basis_ref = compute_basis((dv_ref[..., t_ind],))
+            for j, dv_j in enumerate(dvs):
+                sim = np.zeros((basis_ref.shape[0], len(dv_j)))
+                for k, dv_jk in enumerate(dv_j):
+                    basis_comp = compute_basis((dv_jk[..., t_ind],))
+                    sim[:, k] = (
+                        np.sum(
+                            np.array(
+                                list(
+                                    x.T @ basis_comp[z] for z, x in enumerate(basis_ref)
+                                )
+                            )
+                            ** 2,
+                            axis=(1, 2),
+                        )
+                        / 2
+                    )
+                sims_all[(i, j)] = sim
+    for ind, sim in sims_all.items():
+        if ind[0] == ind[1]:
+            sim[:, ref_inds[ind[0]]] = np.nan
+        gpl.plot_trace_werr(
+            np.arange(sim.shape[1]), sim, ax=axs[ind], confstd=True, **kwargs
+        )
+    return axs
+
+
+def _boxcar(ref_feat, feats, radius=0.2):
+    dists = np.sqrt(np.sum((np.expand_dims(ref_feat, 0) - feats) ** 2, axis=1))
+    weights = dists < radius
+    return weights / np.sum(weights)
+
+
+def average_similar_stimuli(
+    reps,
+    feats,
+    weight_func=_boxcar,
+    **kwargs,
+):
+    new_reps = np.zeros_like(reps)
+    for i, rep_i in enumerate(reps):
+        weights = weight_func(feats[i], feats, **kwargs)
+        new_reps[i] = np.sum(np.expand_dims(weights, 1) * reps, axis=0)
+    return new_reps
+
+
+def project_features_common(
+    dvs_all,
+    *pairs,
+    color_maps=None,
+    t_ind=0,
+    ax=None,
+    fv_ind=0,
+    ms=1,
+    radius=0.15,
+    vmin=-1,
+    vmax=1,
+):
+    if color_maps is None:
+        color_maps = ("magma",) * len(pairs)
+    if ax is None:
+        f, ax = plt.subplots(1, 1, subplot_kw={"projection": "3d"})
+    else:
+        f = None
+    basis = compute_basis(list(dv[..., t_ind] for dv in dvs_all))
+    proj_all = []
+    for pop_p, fvs_p in pairs:
+        pop_pt = pop_p[..., t_ind]
+        proj = np.swapaxes(basis, -1, -2) @ pop_pt
+        proj = np.mean(proj, axis=0).T
+        proj = average_similar_stimuli(proj, fvs_p, radius=radius)
+        proj_all.append(proj)
+    p = skd.PCA(3)
+    p.fit_transform(np.concatenate(proj_all, axis=0))
+    for i, proj in enumerate(proj_all):
+        pts = p.transform(proj)
+        ax.scatter(
+            *pts.T,
+            c=pairs[i][1][:, fv_ind],
+            cmap=color_maps[i],
+            s=ms,
+            vmin=vmin,
+            vmax=vmax,
+        )
+    ax.set_aspect("equal")
+    return f, ax
+
+
+@gpl.ax_adder()
+def choice_projections(
+    dv_reference,
+    target_activity,
+    choice,
+    t_ind=0,
+    use_dim=0,
+    ax=None,
+    plot_points=True,
+    n_bins=6,
+    rescale_choice=True,
+    **kwargs,
+):
+    if rescale_choice:
+        choice = 2 * (choice - 1.5)
+    dv_use = dv_reference[..., use_dim, t_ind]
+    act = target_activity[..., t_ind]
+    proj = dv_use @ act
+    m = sklm.LogisticRegression()
+    m.fit(np.expand_dims(np.mean(proj, axis=0), 1), choice)
+    lr = m.coef_
+    if plot_points:
+        ax.plot(np.mean(proj, axis=0), choice, "o", **kwargs)
+    gpl.plot_scatter_average(
+        np.mean(proj, axis=0), choice, ax=ax, n_bins=n_bins, **kwargs
+    )
+    ax.set_xlabel("projection onto decision axis")
+    ax.set_ylabel("average choice")
+    return lr
+
+
+@gpl.axs_adder(1, 3)
+def choice_projections_all(
+    dv_reference,
+    activity,
+    choices,
+    axs=None,
+    cmap="Blues",
+    cmap_corr="Reds",
+    color_bounds=(0.2, 0.9),
+    bhv_ind=0,
+    corr_ind=1,
+    plot_points=False,
+    **kwargs,
+):
+    cm = plt.get_cmap(cmap)
+    col_num = np.linspace(*color_bounds, len(activity))
+    colors = cm(col_num)
+    cm_corr = plt.get_cmap(cmap_corr)
+    colors_corr = cm_corr(col_num)
+    lrs = []
+    lr_corrs = []
+    for i, act_i in enumerate(activity):
+        lr, _ = choice_projections(
+            dv_reference,
+            act_i,
+            choices[i].to_numpy()[:, bhv_ind],
+            color=colors[i],
+            ax=axs[0],
+            plot_points=plot_points,
+            fill=False,
+            zorder=-i,
+        )
+        lrs.append(lr)
+
+        lr_corr, _ = choice_projections(
+            dv_reference,
+            act_i,
+            choices[i].to_numpy()[:, corr_ind],
+            color=colors_corr[i],
+            ax=axs[1],
+            plot_points=plot_points,
+            fill=False,
+            zorder=-i,
+        )
+        lr_corrs.append(np.squeeze(lr_corr))
+
+    axs[0].set_title("choice")
+    axs[1].set_title("correct")
+    lrs = np.squeeze(np.concatenate(lrs))
+    xs = np.arange(len(activity))
+    gpl.plot_colored_line(xs, lrs, cmap=cmap, ax=axs[2])
+    gpl.plot_colored_line(xs, lr_corrs, cmap=cmap_corr, ax=axs[2])
+    gpl.clean_plot(axs[2], 0)
+    gpl.add_hlines(0, axs[2])
+    axs[2].set_xlabel("session number")
+    axs[2].set_ylabel("correlation")
+
+
+@gpl.ax_adder()
+def plot_cross_session_performance(
+    data_dict, cmaps=None, corr_field="correct", filt_wid=200, ax=None
+):
+    base = 0
+    if cmaps is None:
+        cmaps = (None,) * len(data_dict)
+    for i, (shape, d_use) in enumerate(data_dict.items()):
+        trls = np.concatenate(d_use[corr_field], axis=0)
+        filt = np.ones(filt_wid) / filt_wid
+        smooth_corr = np.convolve(trls, filt, mode="valid")
+        trl_inds = np.arange(len(smooth_corr)) + base
+        gpl.plot_colored_line(trl_inds, smooth_corr, cmap=cmaps[i], ax=ax)
+        base = base + len(trl_inds)
+    gpl.add_hlines(.5, ax)
+    ax.set_xlabel("trial number")
+    ax.set_ylabel("fraction correct")
+    return ax
+
+
+def project_features(
+    dvs,
+    test_inds,
+    orig_pair,
+    *pairs,
+    axs=None,
+    fwid=3,
+    cmap="magma",
+    t_ind=0,
+    ms=1,
+    fv_ind=0,
+    cmap_proj="magma",
+    plot_original=True,
+):
+    pop, fvs = orig_pair
+    if axs is None:
+        f, axs = plt.subplots(
+            len(pairs),
+            2,
+            figsize=(2 * fwid, len(pairs) * fwid),
+            sharex="col",
+            sharey="col",
+            squeeze=False,
+        )
+    qs = []
+    for i, dv_i in enumerate(dvs):
+        dv_i = dv_i[..., t_ind]
+        q = compute_basis((dv_i,))
+        qs.append(q)
+        b1, b2 = dv_i.T @ q
+        ax_fv, ax_proj = axs[0]
+        ax_proj.plot([-b1[0], b1[0]], [-b1[1], b1[1]])
+        ax_proj.plot([-b2[0], b2[0]], [-b2[1], b2[1]])
+        if plot_original:
+            inds = test_inds[i, t_ind]
+            pop_t = pop[..., t_ind]
+            proj = pop_t.T[inds] @ q
+            ax_proj.scatter(*proj.T, c=fvs[inds, fv_ind], cmap=cmap, s=ms)
+            ax_fv.scatter(*fvs[inds].T, c=fvs[inds, fv_ind], cmap=cmap, s=ms)
+
+    for i, (pop_p, fvs_p) in enumerate(pairs):
+        ax_fv, ax_proj = axs[i]
+        pop_pt = pop_p[..., t_ind]
+        proj_ps = []
+        for q in qs:
+            proj_p = pop_pt.T @ q
+            proj_ps.append(proj_p)
+        proj_p = np.mean(proj_ps, axis=0)
+        ax_proj.scatter(*proj_p.T, c=fvs_p[:, fv_ind], cmap=cmap_proj, s=ms)
+        ax_fv.scatter(*fvs_p.T, c=fvs_p[:, fv_ind], cmap=cmap_proj, s=ms)
+
+    ax_proj.set_aspect("equal")
+    ax_fv.set_aspect("equal")
 
 
 def plot_performance(
@@ -481,7 +768,7 @@ def plot_decoder_autocorrelation_map(
     xs,
     gen_arr,
     ax=None,
-    use_cmaps=("Blues", "Reds", "Greens", "Purples", "Oranges"),    
+    use_cmaps=("Blues", "Reds", "Greens", "Purples", "Oranges"),
     heat_cmap="Greys",
     t_targ=250,
     chance=0.5,

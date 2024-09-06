@@ -171,6 +171,217 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 1])
 
 
+class RelativeTransitionFigure(SequenceLearningFigure):
+    def __init__(
+        self,
+        shapes=None,
+        fig_key="relative_transition_figure",
+        exper_data=None,
+        region="IT",
+        fig_folder="",
+        **kwargs,
+    ):
+        fsize = (14, 18)
+
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.region = (region,)
+        self.fig_folder = fig_folder
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+            self.shape_sequence = list(exper_data.keys())
+        elif shapes is not None:
+            self.shape_sequence = shapes
+        else:
+            raise IOError("either data or shape list must be provided")
+        super().__init__(fsize, params, colors=colors, **kwargs)
+
+    def make_gss(self):
+        gss = {}
+
+        task_grid = pu.make_mxn_gridspec(
+            self.gs,
+            1,
+            2,
+            0,
+            20,
+            0,
+            60,
+            5,
+            5,
+        )
+        task_angs = pu.make_mxn_gridspec(
+            self.gs,
+            2,
+            1,
+            5,
+            35,
+            70,
+            100,
+            15,
+            5,
+        )
+        task_axs = self.get_axs(task_grid, squeeze=True, sharex="all", sharey="all")
+        angs_axs = self.get_axs(task_angs, squeeze=True, sharex="all")
+        gss["panel_tasks"] = (task_axs, angs_axs[0])
+
+        dec_ax = self.get_axs((self.gs[15:45, 0:60],), all_3d=True)[0, 0]
+        gss["panel_dec"] = (dec_ax, angs_axs[1])
+
+        learning_grid = pu.make_mxn_gridspec(self.gs, 2, 2, 45, 80, 0, 40, 4, 4)
+        gss["panel_subspace"] = self.get_axs(
+            learning_grid,
+            sharey="all",
+        )
+
+        learning_grid = pu.make_mxn_gridspec(self.gs, 2, 3, 45, 80, 50, 100, 4, 4)
+        gss["panel_learning"] = self.get_axs(learning_grid)
+
+        gss["panel_bhv_learning"] = self.get_axs(
+            (self.gs[85:100, 50:100],),
+        )[0, 0]
+
+        self.gss = gss
+
+    def _analysis(
+        self,
+    ):
+        data_dict = self.load_shape_groups()
+        if self.data.get("main_analysis") is None:
+            t_start = self.params.getfloat("t_start")
+            t_end = self.params.getfloat("t_end")
+            binsize = self.params.getfloat("binsize")
+            binstep = self.params.getfloat("binstep")
+            out = sla.joint_variable_shape_sequence(
+                data_dict,
+                regions=self.region,
+                t_start=t_start,
+                t_end=t_end,
+                binsize=binsize,
+                binstep=binstep,
+                stim_field=["cat_proj", "anticat_proj"],
+            )
+            self.data["main_analysis"] = out
+        return self.data["main_analysis"]
+
+    def panel_tasks(self):
+        key = "panel_tasks"
+        t_axs, ang_ax = self.gss[key]
+
+        sess_ind = -1
+        data_dict = self.load_shape_groups()
+        cmaps = self.params.getlist("colormaps")
+        ang_vecs = []
+        for i, (shape, d_use) in enumerate(data_dict.items()):
+            ang = d_use["cat_def_MAIN"][sess_ind].iloc[0]
+
+            f_both = np.stack(d_use["stim_feature_MAIN"][sess_ind], axis=0) / 1000
+            cp_i = d_use["cat_proj"][sess_ind]
+            t_axs[i].scatter(*f_both.T, c=cp_i, cmap=cmaps[i])
+            ang_vecs.append(
+                np.array((np.sin(np.radians(ang)), np.cos(np.radians(ang))))
+            )
+            t_axs[i].plot(
+                [np.sin(np.radians(ang)), -np.sin(np.radians(ang))],
+                [np.cos(np.radians(ang)), -np.cos(np.radians(ang))],
+                color="k",
+            )
+            t_axs[i].plot(
+                [np.cos(np.radians(ang)), 0],
+                [-np.sin(np.radians(ang)), 0],
+                color="r",
+            )
+            t_axs[i].set_aspect("equal")
+            gpl.clean_plot(t_axs[i], 1)
+            gpl.clean_plot_bottom(t_axs[i])
+        gpl.add_vlines(ang_vecs[0] @ ang_vecs[1], ang_ax)
+
+    def panel_dec(self):
+        key = "panel_dec"
+        vis_ax, ang_ax = self.gss[key]
+        out = self._analysis()
+
+        s1, s2 = self.shape_sequence
+        s1_full_sampled = np.where(slaux.fully_sampled(out[s1]["feats"]))[0]
+        s2_full_sampled = np.where(slaux.fully_sampled(out[s2]["feats"]))[0]
+
+        color_maps = ("magma", "cividis")
+        sess_ind_base_s1 = s1_full_sampled[-1]
+        sess_ind_base_s2 = s2_full_sampled[0]
+        sess_ind_s1 = (s1_full_sampled[-2],)
+        sess_ind_s2 = (s2_full_sampled[1],)
+        dv_s1 = out[s1]["dvs"][sess_ind_base_s1]
+        dv_s2 = out[s2]["dvs"][sess_ind_base_s2]
+
+        projs_s1 = list(
+            (out[s1]["pops"][si], out[s1]["feats"][si]) for si in sess_ind_s1
+        )
+        projs_s2 = list(
+            (out[s2]["pops"][si], out[s2]["feats"][si]) for si in sess_ind_s2
+        )
+        projs = projs_s1 + projs_s2
+
+        _ = slv.project_features_common(
+            (dv_s1, dv_s2),
+            *projs,
+            color_maps=color_maps,
+            ax=vis_ax,
+        )
+
+        f, ax = slv.project_features_common(
+            (dv_s1, dv_s2),
+            *projs,
+            color_maps=color_maps,
+        )
+        fp = os.path.join(self.fig_folder, "vis_{}-{}.mp4".format(*self.shape_sequence))
+        gpl.rotate_3d_plot(f, ax, fp, fps=30)
+
+        v_a2 = u.make_unit_vector(out[s1]["dvs"][-1][..., 0, 0])
+        v_a2_i = u.make_unit_vector(out[s1]["dvs"][-2][..., 0, 0])
+        v_a3 = u.make_unit_vector(out[s2]["dvs"][0][..., 0, 0])
+        v_a3_i = u.make_unit_vector(out[s2]["dvs"][1][..., 0, 0])
+
+        ang_ax.hist((v_a2 @ v_a3.T).flatten())
+        ang_ax.hist((v_a2_i @ v_a2.T).flatten())
+        ang_ax.hist((v_a3_i @ v_a3.T).flatten())
+
+    def panel_subspace(self):
+        key = "panel_subspace"
+        axs = self.gss[key]
+        out = self._analysis()
+        s1, s2 = self.shape_sequence
+
+        slv.plot_all_cross_projections(out[s1]["dvs"], out[s2]["dvs"], axs=axs)
+
+    def panel_learning(self):
+        key = "panel_learning"
+        ax_cross, ax_within = self.gss[key]
+        out = self._analysis()
+        s1, s2 = self.shape_sequence
+
+        dv_ref = out[s1]["dvs"][-1]
+        pops = out[s2]["pops"]
+        choices = out[s2]["trial_info"]
+        slv.choice_projections_all(dv_ref, pops, choices, n_bins=6, axs=ax_cross)
+
+        dv_ref = out[s2]["dvs"][-1]
+        pops = out[s2]["pops"][:-1]
+        choices = out[s2]["trial_info"][:-1]
+        slv.choice_projections_all(dv_ref, pops, choices, n_bins=6, axs=ax_within)
+
+    def panel_bhv_learning(self):
+        key = "panel_bhv_learning"
+        ax = self.gss[key]
+        data_dict = self.load_shape_groups()
+        slv.plot_cross_session_performance(data_dict, ax=ax, cmaps=("Blues", "Reds"))
+        gpl.clean_plot(ax, 0)
+
+
 class ShapeComparison(SequenceLearningFigure):
     def __init__(
         self,

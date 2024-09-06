@@ -24,7 +24,7 @@ def find_positions(data_dict, pos_key="stim_aperture"):
             pos_cat = np.concatenate(shape_data[pos_key])
             u_pos = np.unique(list(tuple(x) for x in pos_cat), axis=0)
             pos_dict[shape] = u_pos
-            
+
     return pos_dict
 
 
@@ -330,7 +330,7 @@ def _generalize_cross_session_decoder(
         )
         out_gen[i, i] = out["score"]
         out_var[i, i] = np.var(out["projection"], axis=-1)
-        
+
         for j, p1_j in enumerate(pops1):
             p2_j = pops2[j]
             if i != j:
@@ -348,12 +348,120 @@ def _generalize_cross_session_decoder(
     return shapes, dates, out_gen, out_var
 
 
+def joint_variable_shape_sequence(
+    data_dict,
+    shapes=None,
+    t_start=0,
+    t_end=500,
+    binsize=500,
+    binstep=500,
+    regions=("IT",),
+    time_zero_field="stim_on",
+    stim_field="stim_feature_MAIN",
+    keep_session_info=("date",),
+    keep_trial_info=("chosen_cat", "stim_sample_MAIN"),
+):
+    if shapes is None:
+        shapes = data_dict.keys()
+    out_dict = {}
+    for shape in shapes:
+        pops, xs = data_dict[shape].get_neural_activity(
+            binsize,
+            t_start,
+            t_end,
+            binstep,
+            skl_axes=True,
+            time_zero_field=time_zero_field,
+            regions=regions,
+        )
+        if u.check_list(stim_field):
+            feats = list(np.array(x) for x in data_dict[shape][stim_field])
+        else:
+            feats = list(np.stack(x, axis=0) for x in data_dict[shape][stim_field])
+        session_info = data_dict[shape][list(keep_session_info)]
+        trial_info = data_dict[shape][list(keep_trial_info)]
+        session_dict = joint_variable_decoder(
+            pops, feats, shape_labels=session_info, keep_trial_info=trial_info,
+        )
+        out_dict[shape] = session_dict
+    return out_dict
+
+
+def joint_variable_decoder(
+    pops,
+    feature_vars,
+    model=skm.LinearSVC,
+    shape_labels=None,
+    keep_trial_info=None,
+    n_folds=20,
+    min_trials=100,
+    indiv_zscore=True,
+    **kwargs,
+):
+    if shape_labels is None:
+        shape_labels = (None,) * len(pops)
+    if keep_trial_info is None:
+        keep_trial_info = (None,) * len(pops)
+    n_neurs = np.max(list(p.shape[0] for p in pops))
+    n_ts = pops[0].shape[-1]
+    n_feats = feature_vars[0].shape[1]
+    dv_shape = (n_folds, n_neurs, n_feats, n_ts)
+    dec_vecs = []
+    proc_pops = []
+    test_inds = []
+    feats = []
+    session_info = []
+    trial_info = []
+    for i, pop_i in enumerate(pops):
+        fv_i = feature_vars[i]
+        if len(fv_i) >= min_trials and pop_i.shape[0] > 0:
+            labels_i = fv_i > 0
+            if indiv_zscore:
+                (pop_i,) = na.zscore_tc(pop_i)
+            pop_i = np.squeeze(pop_i)
+            proc_pops.append(pop_i)
+            feats.append(fv_i)
+            out = na.fold_skl_flat(
+                pop_i,
+                labels_i,
+                n_folds,
+                mean=False,
+                model=model,
+                pre_pca=None,
+                norm=False,
+                **kwargs,
+            )
+            ests = out["estimators"]
+            test_inds.append(out["test_inds"])
+            n_neur_i = pop_i.shape[0]
+            dv_i = np.zeros(dv_shape)
+            for k, l_ in u.make_array_ind_iterator(ests.shape):
+                coefs = np.squeeze(
+                    np.stack(
+                        list(est.coef_ for est in ests[k, l_][-1].estimators_), axis=0
+                    )
+                )
+                dv_i[k, :n_neur_i, :, l_] = coefs.T
+            dec_vecs.append(dv_i)
+            session_info.append(shape_labels.iloc[i])
+            trial_info.append(keep_trial_info[i])
+    out_dict = {
+        "dvs": dec_vecs,
+        "test_inds": test_inds,
+        "pops": proc_pops,
+        "feats": feats,
+        "session_info": session_info,
+        "trial_info": trial_info,
+    }
+    return out_dict    
+
+
 def resample_uniform_performance(
     data, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000
 ):
     corr = data[cho_field] == data[targ_field]
     perf = np.zeros((len(corr), n_samps))
-    masks = slaux.sample_uniform_mask(data, n_samps=n_samps)
+    masks = slaux.sample_uniform_mask(data, n_asamps=n_samps)
     for j, corr_j in enumerate(corr):
         for i in range(n_samps):
             perf[j, i] = np.nanmean(corr[masks[j][:, i]])

@@ -251,11 +251,29 @@ def _get_projs(
     return cat, anticat
 
 
+angle_corrections = {
+    "A4": -30,
+    "A5": 30,
+}
+
+def fully_sampled(fvs, bound=.7, eps=.1):
+    mask = []
+    for fv_i in fvs:
+        mins = np.min(fv_i, axis=0)
+        c1 = np.all(mins < (bound + bound * eps))
+        maxs = np.max(fv_i, axis=0)
+        c2 = np.all(maxs > (bound - bound * eps))
+        c3 = np.any(np.sqrt(np.sum(fv_i ** 2, axis=1)) < eps * bound)
+        mask.append(c1 and c2 and c3)
+    return np.array(mask)
+
+
 def load_kiani_data_folder(
     folder,
     templates=file_templates,
     monkey_name="Z",
     max_files=np.inf,
+    angle_corrections=angle_corrections,
     center_pt=(-2, -2),
 ):
     datas = []
@@ -288,13 +306,15 @@ def load_kiani_data_folder(
             data_fl["neur_regions"] = (((fl_info["region"],) * n_neur_fl),) * len(
                 data_fl["spikeTimes"]
             )
-        data_fl_pd = pd.DataFrame.from_dict(data_fl)
         cats = data_fl["stim_sample_MAIN"]
         opp_cats = np.zeros_like(cats)
         opp_cats[cats == 1] = 2
         opp_cats[cats == 2] = 1
         corr_targ = data_fl["targ_cor"]
         cho_targ = data_fl["targ_cho"]
+        if shape in angle_corrections.keys():
+            data_fl["cat_def_MAIN"] = data_fl["cat_def_MAIN"] + angle_corrections[shape]
+        data_fl_pd = pd.DataFrame.from_dict(data_fl)
         if "stim_aperture" in data_fl.keys():
             pos = np.stack(list(tuple(x) for x in data_fl["stim_aperture"]), axis=0)
             uv = u.make_unit_vector(pos[:, :2] - center_pt)
@@ -326,12 +346,24 @@ def load_kiani_data_folder(
         choices = np.zeros_like(cats)
         choices[:] = np.nan
         mask_corr = corr_targ == cho_targ
+        data_fl_pd["correct"] = mask_corr
         choices[mask_corr] = cats[mask_corr]
         choices[~mask_corr] = opp_cats[~mask_corr]
         data_fl_pd["chosen_cat"] = choices
-        cat, anticat = _get_projs(data_fl_pd)
-        data_fl_pd["cat_proj"] = cat
-        data_fl_pd["anticat_proj"] = anticat
+        cat_proj, anticat_proj = _get_projs(data_fl_pd)
+        u_cats = np.unique(cats[cat_proj > 0])
+        try:
+            assert len(u_cats) == 1
+        except AssertionError:
+            print(shape)
+            print(np.unique(cats[cat_proj > 0], return_counts=True))
+            cp1 = cat_proj[cats == 1]
+            print(cp1[cp1 > 0])
+        if cats[cat_proj > 0][0] == 1:
+            cat_proj = -cat_proj
+            print("{} flipped category projection".format(shape))
+        data_fl_pd["cat_proj"] = cat_proj
+        data_fl_pd["anticat_proj"] = anticat_proj
 
         datas.append(data_fl_pd)
         n_neurs.append(n_neur_fl)

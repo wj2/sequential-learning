@@ -1,12 +1,10 @@
 import argparse
 import pickle
 from datetime import datetime
-import matplotlib.pyplot as plt
 import os
 
 import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
-import sequential_learning.visualization as slv
 import sequential_learning.figures as slf
 
 
