@@ -33,6 +33,7 @@ def create_parser():
     parser.add_argument("--jobid", default="0000", type=str)
     parser.add_argument("--sequence_ind", default=0, type=int)
     parser.add_argument("--region", default="IT")
+    parser.add_argument("--no_post", default=False, action="store_true")
     return parser
 
 
@@ -41,16 +42,20 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.date = datetime.now()
-    if args.sequence_ind >= len(slaux.shape_sequence) - 2:
+    if args.no_post:
+        use_seq = slaux.shape_sequence_nopost
+    else:
+        use_seq = slaux.shape_sequence
+    if args.sequence_ind >= len(use_seq) - 2:
         raise IOError(
-            "ind {} is too high for list {}".format(
-                args.sequence_ind, slaux.shape_sequence
+            "ind {} is too high for length {} list {}".format(
+                args.sequence_ind, len(use_seq), use_seq
             )
         )
     else:
         seq_start = args.sequence_ind
         seq_end = args.sequence_ind + 2
-        shapes = slaux.shape_sequence[seq_start:seq_end]
+        shapes = use_seq[seq_start:seq_end]
 
     data_dict = slaux.load_shape_list(shapes)
 

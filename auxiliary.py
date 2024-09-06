@@ -66,6 +66,21 @@ shape_sequence = (
 )
 
 
+shape_sequence_nopost = (
+    "A2",
+    "A3",
+    "A4",
+    "A5",
+    "A6",
+    "A7",
+    "A8",
+    "A9",
+    "A9t",
+    "A10",
+    "A10t",
+)
+
+
 def get_boundary_angles(shapes=None, data_folder=BASEFOLDER, **kwargs):
     if shapes is None:
         shapes = shape_sequence
