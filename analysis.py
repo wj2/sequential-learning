@@ -360,12 +360,18 @@ def joint_variable_shape_sequence(
     stim_field="stim_feature_MAIN",
     keep_session_info=("date",),
     uniform_only=False,
+    uniform_kwargs=None,
     keep_trial_info=("chosen_cat", "stim_sample_MAIN"),
 ):
     if shapes is None:
         shapes = data_dict.keys()
     out_dict = {}
     for shape in shapes:
+        data_use = data_dict[shape]
+        if uniform_only:
+            if uniform_kwargs is None:
+                uniform_kwargs = {}
+            data_use = slaux.uniform_sample_mask(data_use, **uniform_kwargs)
         pops, xs = data_dict[shape].get_neural_activity(
             binsize,
             t_start,
