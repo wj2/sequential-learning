@@ -34,6 +34,7 @@ def create_parser():
     parser.add_argument("--sequence_ind", default=0, type=int)
     parser.add_argument("--region", default="IT")
     parser.add_argument("--no_post", default=False, action="store_true")
+    parser.add_argument("--uniform_only", default=False, action="store_true")
     return parser
 
 
@@ -63,6 +64,7 @@ if __name__ == "__main__":
         exper_data=data_dict,
         fig_folder=args.output_folder,
         region=args.region,
+        uniform_only=args.uniform_only,
     )
     fig.panel_tasks()
     fig.panel_dec()

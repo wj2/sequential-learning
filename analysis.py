@@ -359,6 +359,7 @@ def joint_variable_shape_sequence(
     time_zero_field="stim_on",
     stim_field="stim_feature_MAIN",
     keep_session_info=("date",),
+    uniform_only=False,
     keep_trial_info=("chosen_cat", "stim_sample_MAIN"),
 ):
     if shapes is None:

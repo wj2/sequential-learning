@@ -179,6 +179,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         exper_data=None,
         region="IT",
         fig_folder="",
+        uniform_only=False,
         **kwargs,
     ):
         fsize = (14, 18)
@@ -189,6 +190,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         self.fig_key = fig_key
         self.region = (region,)
         self.fig_folder = fig_folder
+        self.uniform_only = uniform_only
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
             data = kwargs.get("data", {})
@@ -264,6 +266,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
                 t_end=t_end,
                 binsize=binsize,
                 binstep=binstep,
+                uniform_only=self.uniform_only,
                 stim_field=["cat_proj", "anticat_proj"],
             )
             self.data["main_analysis"] = out
