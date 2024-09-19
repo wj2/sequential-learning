@@ -58,10 +58,8 @@ if __name__ == "__main__":
         seq_end = args.sequence_ind + 2
         shapes = use_seq[seq_start:seq_end]
 
-    data_dict = slaux.load_shape_list(shapes)
-
     fig = slf.RelativeTransitionFigure(
-        exper_data=data_dict,
+        shapes=shapes,
         fig_folder=args.output_folder,
         region=args.region,
         uniform_resample=args.uniform_resample,
@@ -76,5 +74,5 @@ if __name__ == "__main__":
     fn = args.output_template.format(shape=shape_str, jobid=args.jobid)
     path = os.path.join(args.output_folder, fn)
     fig.save(path + ".pdf", use_bf="")
-    analysis_results = fig.get_data()["main_analysis"]
+    analysis_results = fig.get_data().get("main_analysis")
     pickle.dump(analysis_results, open(path + ".pkl", "wb"))

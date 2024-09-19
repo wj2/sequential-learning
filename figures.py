@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import matplotlib.pyplot as plt
 
 import general.data_io as gio
 import general.paper_utilities as pu
@@ -179,7 +180,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         exper_data=None,
         region="IT",
         fig_folder="",
-        uniform_only=False,
+        uniform_resample=False,
         **kwargs,
     ):
         fsize = (14, 18)
@@ -190,7 +191,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         self.fig_key = fig_key
         self.region = (region,)
         self.fig_folder = fig_folder
-        self.uniform_only = uniform_only
+        self.uniform_resample = uniform_resample
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
             data = kwargs.get("data", {})
