@@ -353,6 +353,11 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         ang_ax.hist((v_a2_i @ v_a2.T).flatten())
         ang_ax.hist((v_a3_i @ v_a3.T).flatten())
 
+    def video_test(self):
+        f, ax = plt.subplots(1, 1, subplot_kw={"projection": "3d"})
+        fp = os.path.join(self.fig_folder, "vis_{}-{}.mp4".format(*self.shape_sequence))
+        gpl.rotate_3d_plot(f, ax, fp, fps=30)
+
     def panel_subspace(self):
         key = "panel_subspace"
         axs = self.gss[key]
