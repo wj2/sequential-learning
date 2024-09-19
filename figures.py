@@ -269,7 +269,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
                 t_end=t_end,
                 binsize=binsize,
                 binstep=binstep,
-                uniform_only=self.uniform_only,
+                uniform_resample=self.uniform_resample,
                 stim_field=["cat_proj", "anticat_proj"],
             )
             self.data["main_analysis"] = out
