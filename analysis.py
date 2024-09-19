@@ -372,7 +372,7 @@ def joint_variable_shape_sequence(
             if uniform_kwargs is None:
                 uniform_kwargs = {}
             data_use = uniform_sample_mask(data_use, **uniform_kwargs)
-        pops, xs = data_dict[shape].get_neural_activity(
+        pops, xs = data_use.get_neural_activity(
             binsize,
             t_start,
             t_end,
@@ -382,11 +382,11 @@ def joint_variable_shape_sequence(
             regions=regions,
         )
         if u.check_list(stim_field):
-            feats = list(np.array(x) for x in data_dict[shape][stim_field])
+            feats = list(np.array(x) for x in data_use[stim_field])
         else:
-            feats = list(np.stack(x, axis=0) for x in data_dict[shape][stim_field])
-        session_info = data_dict[shape][list(keep_session_info)]
-        trial_info = data_dict[shape][list(keep_trial_info)]
+            feats = list(np.stack(x, axis=0) for x in data_use[stim_field])
+        session_info = data_use[list(keep_session_info)]
+        trial_info = data_use[list(keep_trial_info)]
         session_dict = joint_variable_decoder(
             pops, feats, shape_labels=session_info, keep_trial_info=trial_info,
         )
