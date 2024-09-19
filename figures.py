@@ -181,6 +181,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         region="IT",
         fig_folder="",
         uniform_resample=False,
+        save_video=True,
         **kwargs,
     ):
         fsize = (14, 18)
@@ -192,6 +193,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         self.region = (region,)
         self.fig_folder = fig_folder
         self.uniform_resample = uniform_resample
+        self.save_video = save_video
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
             data = kwargs.get("data", {})
@@ -337,13 +339,16 @@ class RelativeTransitionFigure(SequenceLearningFigure):
             ax=vis_ax,
         )
 
-        f, ax = slv.project_features_common(
-            (dv_s1, dv_s2),
-            *projs,
-            color_maps=color_maps,
-        )
-        fp = os.path.join(self.fig_folder, "vis_{}-{}.mp4".format(*self.shape_sequence))
-        gpl.rotate_3d_plot(f, ax, fp, fps=30)
+        if self.save_video:
+            f, ax = slv.project_features_common(
+                (dv_s1, dv_s2),
+                *projs,
+                color_maps=color_maps,
+            )
+            fp = os.path.join(
+                self.fig_folder, "vis_{}-{}.mp4".format(*self.shape_sequence),
+            )
+            gpl.rotate_3d_plot(f, ax, fp, fps=30)
 
         v_a2 = u.make_unit_vector(out[s1]["dvs"][-1][..., 0, 0])
         v_a2_i = u.make_unit_vector(out[s1]["dvs"][-2][..., 0, 0])
