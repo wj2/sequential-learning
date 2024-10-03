@@ -508,7 +508,14 @@ def joint_variable_decoder(
     for i, pop_i in enumerate(pops):
         fv_i = feature_vars[i]
         if len(fv_i) >= min_trials and pop_i.shape[0] > 0:
-            labels_i = fv_i > 0
+            labels_i = []
+            for j in range(fv_i.shape[1]):
+                fv_ij = fv_i[:, j]
+                if len(np.unique(fv_ij)) > 2:
+                    labels_i.append(fv_ij > 0)
+                else:
+                    labels_i.append(fv_ij > np.mean(fv_ij))
+            labels_i = np.stack(labels_i, axis=1)
             if indiv_zscore:
                 (pop_i,) = na.zscore_tc(pop_i)
             pop_i = np.squeeze(pop_i)
