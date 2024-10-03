@@ -251,6 +251,9 @@ class RelativeTransitionFigure(SequenceLearningFigure):
             (self.gs[85:100, 50:100],),
         )[0, 0]
 
+        proj_grids = pu.make_mxn_gridspec(self.gs, 1, 2, 85, 100, 0, 40, 4, 4)
+        gss["panel_proj_learning"] = self.get_axs(proj_grids, sharey="all")
+
         self.gss = gss
 
     def _analysis(
@@ -346,7 +349,8 @@ class RelativeTransitionFigure(SequenceLearningFigure):
                 color_maps=color_maps,
             )
             fp = os.path.join(
-                self.fig_folder, "vis_{}-{}.mp4".format(*self.shape_sequence),
+                self.fig_folder,
+                "vis_{}-{}.mp4".format(*self.shape_sequence),
             )
             gpl.rotate_3d_plot(f, ax, fp, fps=30)
 
@@ -394,6 +398,42 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         data_dict = self.load_shape_groups()
         slv.plot_cross_session_performance(data_dict, ax=ax, cmaps=("Blues", "Reds"))
         gpl.clean_plot(ax, 0)
+
+    def panel_proj_learning(self):
+        key = "panel_proj_learning"
+        axs = self.gss[key]
+
+        out_data = self._analysis()
+        s1, s2 = self.shape_sequence
+        test_trls = self.params.getint("proj_test_trls")
+        avg_wid = self.params.getint("proj_avg_wid")
+
+        out = sla.choice_projection_tc(
+            out_data[s1],
+            out_data[s2],
+            test_trls=test_trls,
+            avg_wid=avg_wid,
+        )
+
+        xs_len = len(out["s1 on s1"])
+        gpl.plot_colored_line(np.arange(xs_len), out["s1 on s1"], ax=axs[0])
+        gpl.plot_colored_line(
+            np.arange(xs_len), out["s1 on s2"], ax=axs[0], cmap="Reds"
+        )
+        gpl.plot_colored_line(
+            np.arange(xs_len), out["s1 corr"], ax=axs[0], cmap="Greys"
+        )
+        gpl.plot_colored_line(np.arange(xs_len), out["s2 on s1"], ax=axs[1])
+        gpl.plot_colored_line(
+            np.arange(xs_len), out["s2 on s2"], ax=axs[1], cmap="Reds"
+        )
+        gpl.plot_colored_line(
+            np.arange(xs_len), out["s2 corr"], ax=axs[1], cmap="Greys"
+        )
+        gpl.add_hlines(0.5, axs[0])
+        gpl.add_hlines(0.5, axs[1])
+        gpl.clean_plot(axs[0], 0)
+        gpl.clean_plot(axs[1], 1)
 
 
 class ShapeComparison(SequenceLearningFigure):

@@ -73,6 +73,7 @@ if __name__ == "__main__":
     fig.panel_subspace()
     fig.panel_learning()
     fig.panel_bhv_learning()
+    fig.panel_proj_learning()
 
     shape_str = "-".join(shapes)
     fn = args.output_template.format(shape=shape_str, jobid=args.jobid)
