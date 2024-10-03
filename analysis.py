@@ -443,6 +443,7 @@ def joint_variable_shape_sequence(
     uniform_resample=False,
     uniform_kwargs=None,
     keep_trial_info=("chosen_cat", "stim_sample_MAIN"),
+    **kwargs,
 ):
     if shapes is None:
         shapes = data_dict.keys()
@@ -473,6 +474,7 @@ def joint_variable_shape_sequence(
             feats,
             shape_labels=session_info,
             keep_trial_info=trial_info,
+            **kwargs,
         )
         out_dict[shape] = session_dict
     return out_dict

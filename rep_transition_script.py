@@ -37,6 +37,10 @@ def create_parser():
     parser.add_argument("--uniform_resample", default=False, action="store_true")
     parser.add_argument("--no_video", default=False, action="store_true")
     parser.add_argument("--min_trials", default=100, type=int)
+    parser.add_argument(
+        "--include_choice_dimension", default=False, action="store_true"
+    )
+    parser.add_argument("--only_choice_dimension", default=False, action="store_true")
     return parser
 
 
@@ -59,6 +63,11 @@ if __name__ == "__main__":
         seq_start = args.sequence_ind
         seq_end = args.sequence_ind + 2
         shapes = use_seq[seq_start:seq_end]
+    use_fields = ("cat_proj", "anticat_proj")
+    if args.include_choice_dimension:
+        use_fields = ("chosen_cat",) + use_fields
+    if args.only_choice_dimension:
+        use_fields = ("chosen_cat",)
 
     fig = slf.RelativeTransitionFigure(
         shapes=shapes,
@@ -67,6 +76,7 @@ if __name__ == "__main__":
         uniform_resample=args.uniform_resample,
         save_video=not args.no_video,
         min_trials=args.min_trials,
+        use_fields=use_fields,
     )
     fig.panel_tasks()
     fig.panel_dec()

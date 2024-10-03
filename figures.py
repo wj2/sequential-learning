@@ -182,6 +182,8 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         fig_folder="",
         uniform_resample=False,
         save_video=True,
+        min_trials=100,
+        use_fields=("cat_proj", "anticat_proj"),
         **kwargs,
     ):
         fsize = (14, 18)
@@ -193,6 +195,8 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         self.region = (region,)
         self.fig_folder = fig_folder
         self.uniform_resample = uniform_resample
+        self.min_trials = min_trials
+        self.use_fields = list(use_fields)
         self.save_video = save_video
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
@@ -273,7 +277,8 @@ class RelativeTransitionFigure(SequenceLearningFigure):
                 binsize=binsize,
                 binstep=binstep,
                 uniform_resample=self.uniform_resample,
-                stim_field=["cat_proj", "anticat_proj"],
+                stim_field=self.use_fields,
+                min_trials=self.min_trials,
             )
             self.data["main_analysis"] = out
         return self.data["main_analysis"]
