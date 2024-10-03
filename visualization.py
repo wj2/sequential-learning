@@ -324,8 +324,48 @@ def choice_projections_all(
 
 
 @gpl.ax_adder()
+def plot_shape_transition_performance(
+    data_dict,
+    ax=None,
+    corr_field="correct",
+    filt_wid=10,
+    filt_step=10,
+    plot_len=100,
+    gap=20,
+    cmaps=None,
+    cbound_begin = (0.3, 0.55),
+    cbound_end = (0.65, 0.99),
+):
+    if cmaps is None:
+        cmaps = (None,) * len(data_dict)
+    base = 0
+    for i, (shape, d_use) in enumerate(data_dict.items()):
+        corr_traj = np.concatenate(d_use[corr_field], axis=0)
+        filt = np.ones(filt_wid) / filt_wid
+        corr_filt = np.convolve(corr_traj, filt, mode="valid")
+        xs_begin = np.arange(plot_len) + base
+        xs_end = np.arange(plot_len) + plot_len + base + gap
+        base = base + 2 * plot_len + base + gap
+        gpl.plot_colored_line(
+            xs_begin,
+            corr_filt[:plot_len],
+            cmap=cmaps[i],
+            ax=ax,
+            color_bounds=cbound_begin,
+        )
+        gpl.plot_colored_line(
+            xs_end, corr_filt[-plot_len:], cmap=cmaps[i], ax=ax, color_bounds=cbound_end
+        )
+    gpl.add_hlines(0.5, ax)
+
+
+@gpl.ax_adder()
 def plot_cross_session_performance(
-    data_dict, cmaps=None, corr_field="correct", filt_wid=200, ax=None
+    data_dict,
+    cmaps=None,
+    corr_field="correct",
+    filt_wid=200,
+    ax=None,
 ):
     base = 0
     if cmaps is None:
@@ -337,7 +377,7 @@ def plot_cross_session_performance(
         trl_inds = np.arange(len(smooth_corr)) + base
         gpl.plot_colored_line(trl_inds, smooth_corr, cmap=cmaps[i], ax=ax)
         base = base + len(trl_inds)
-    gpl.add_hlines(.5, ax)
+    gpl.add_hlines(0.5, ax)
     ax.set_xlabel("trial number")
     ax.set_ylabel("fraction correct")
     return ax

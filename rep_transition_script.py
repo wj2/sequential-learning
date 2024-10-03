@@ -36,6 +36,7 @@ def create_parser():
     parser.add_argument("--no_post", default=False, action="store_true")
     parser.add_argument("--uniform_resample", default=False, action="store_true")
     parser.add_argument("--no_video", default=False, action="store_true")
+    parser.add_argument("--min_trials", default=100, type=int)
     return parser
 
 
@@ -64,7 +65,8 @@ if __name__ == "__main__":
         fig_folder=args.output_folder,
         region=args.region,
         uniform_resample=args.uniform_resample,
-        save_video=not args.no_video
+        save_video=not args.no_video,
+        min_trials=args.min_trials,
     )
     fig.panel_tasks()
     fig.panel_dec()

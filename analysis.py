@@ -2,6 +2,7 @@ import itertools as it
 import numpy as np
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
+import sklearn.linear_model as sklm
 
 import general.utility as u
 import general.neural_analysis as na
@@ -348,6 +349,86 @@ def _generalize_cross_session_decoder(
     return shapes, dates, out_gen, out_var
 
 
+def choice_projection_tc(
+    s1,
+    s2,
+    t_ind=0,
+    s1_ind=-1,
+    s1_dv_ind=-2,
+    s2_ind=0,
+    s2_dv_ind=1,
+    dv_ind=0,
+    choice_field="chosen_cat",
+    cat_field="stim_sample_MAIN",
+    test_trls=100,
+    avg_wid=20,
+    both_start=False,
+    use_all_dv_ind=False,
+):
+    p_s1 = s1["pops"][s1_ind][..., t_ind]
+    p_s2 = s2["pops"][s2_ind][..., t_ind]
+    if use_all_dv_ind:
+        dv_s1 = s1["dvs"][s1_dv_ind][..., t_ind]
+        dv_s1 = np.concatenate(
+            list(dv_s1[..., j] for j in range(dv_s1.shape[-1]))
+        )
+        dv_s2 = s1["dvs"][s2_dv_ind][..., t_ind]
+        dv_s2 = np.concatenate(
+            list(dv_s2[..., j] for j in range(dv_s2.shape[-1]))
+        )
+    else:
+        dv_s1 = s1["dvs"][s1_dv_ind][..., dv_ind, t_ind]
+        dv_s2 = s2["dvs"][s2_dv_ind][..., dv_ind, t_ind]
+    c_s1 = s1["trial_info"][s1_ind][choice_field]
+    c_s2 = s2["trial_info"][s2_ind][choice_field]
+    t_s1 = s1["trial_info"][s1_ind][cat_field]
+    t_s2 = s2["trial_info"][s2_ind][cat_field]
+
+    projs_s1_to_s1 = (dv_s1 @ p_s1).T
+    projs_s2_to_s1 = (dv_s1 @ p_s2).T
+    projs_s1_to_s2 = (dv_s2 @ p_s1).T
+    projs_s2_to_s2 = (dv_s2 @ p_s2).T
+
+    corr_traj = {}
+    m_s1 = sklm.LogisticRegression()
+    if both_start:
+        proj_tr, c_tr = projs_s1_to_s1[test_trls:], c_s1[test_trls:]
+        proj_te_s1, c_te_s1 = projs_s1_to_s1[:test_trls], c_s1[:test_trls]
+        proj_te_s2, c_te_s2 = projs_s2_to_s1[:test_trls], c_s1[:test_trls]
+        t_s1_te = t_s1[:test_trls]
+    else:
+        proj_tr, c_tr = projs_s1_to_s1[:-test_trls], c_s1[:-test_trls]
+        proj_te_s1, c_te_s1 = projs_s1_to_s1[-test_trls:], c_s1[-test_trls:]
+        proj_te_s2, c_te_s2 = projs_s2_to_s1[:test_trls], c_s1[:test_trls]
+        t_s1_te = t_s1[-test_trls:]
+    m_s1.fit(proj_tr, c_tr)
+    preds_s1_on_s1 = m_s1.predict(proj_te_s1)
+    preds_s2_on_s1 = m_s1.predict(proj_te_s2)
+    corr_traj["s1 on s1"] = s1 = preds_s1_on_s1 == c_te_s1
+    corr_traj["s2 on s1"] = preds_s2_on_s1 == c_te_s2
+    corr_traj["s1 corr"] =  t_s1_te == c_te_s1
+    
+    m_s2 = sklm.LogisticRegression()
+    proj_tr, c_tr = projs_s2_to_s2[test_trls:], c_s2[test_trls:]
+    if both_start:
+        proj_te_s1, c_te_s1 = projs_s1_to_s2[:test_trls], c_s1[:test_trls]        
+    else:
+        proj_te_s1, c_te_s1 = projs_s1_to_s2[-test_trls:], c_s1[-test_trls:]
+    proj_te_s2, c_te_s2 = projs_s2_to_s2[:test_trls], c_s2[:test_trls]
+    m_s2.fit(proj_tr, c_tr)
+    preds_s1_on_s2 = m_s2.predict(proj_te_s1)
+    preds_s2_on_s2 = m_s2.predict(proj_te_s2)
+    corr_traj["s1 on s2"] = preds_s1_on_s2 == c_te_s1
+    corr_traj["s2 on s2"] = preds_s2_on_s2 == c_te_s2
+    corr_traj["s2 corr"] = t_s2[:test_trls] == c_te_s2
+
+    smooth_corr_traj = {}
+    filt = np.ones(avg_wid) / avg_wid
+    for k, traj in corr_traj.items():
+        smooth_corr_traj[k] = np.convolve(traj, filt, mode="valid")
+    return smooth_corr_traj
+    
+
 def joint_variable_shape_sequence(
     data_dict,
     shapes=None,
@@ -388,7 +469,10 @@ def joint_variable_shape_sequence(
         session_info = data_use[list(keep_session_info)]
         trial_info = data_use[list(keep_trial_info)]
         session_dict = joint_variable_decoder(
-            pops, feats, shape_labels=session_info, keep_trial_info=trial_info,
+            pops,
+            feats,
+            shape_labels=session_info,
+            keep_trial_info=trial_info,
         )
         out_dict[shape] = session_dict
     return out_dict
@@ -460,7 +544,7 @@ def joint_variable_decoder(
         "session_info": session_info,
         "trial_info": trial_info,
     }
-    return out_dict    
+    return out_dict
 
 
 def resample_uniform_performance(

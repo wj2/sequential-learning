@@ -124,7 +124,7 @@ def sample_uniform_mask(
     cat_proj="cat_proj",
     anticat_proj="anticat_proj",
     proj_range=None,
-    n_bins=5,
+    n_bins=3,
     eps=1e-10,
     n_samps=1,
 ):
@@ -156,7 +156,7 @@ def sample_uniform_mask(
         if trl_samps > 1:
             splitter = skms.StratifiedShuffleSplit(
                 n_splits=n_samps,
-                train_size=int(trl_samps) * np.product(counts_distrib.shape),
+                train_size=int(trl_samps) * np.prod(counts_distrib.shape),
             )
             splitter_gen = splitter.split(sample_pos_reduced, binnumber)
             samp_inds = list(reduced_inds[tr] for tr, _ in splitter_gen)
@@ -376,6 +376,9 @@ def load_kiani_data_folder(
             print(cp1[cp1 > 0])
         if cats[cat_proj > 0][0] == 1:
             cat_proj = -cat_proj
+            data_fl_pd["cat_def_MAIN"] = u.normalize_periodic_range(
+                data_fl_pd["cat_def_MAIN"] + 180, radians=False,
+            )
             print("{} flipped category projection".format(shape))
         data_fl_pd["cat_proj"] = cat_proj
         data_fl_pd["anticat_proj"] = anticat_proj
