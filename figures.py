@@ -256,7 +256,9 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         )[0, 0]
 
         proj_grids = pu.make_mxn_gridspec(self.gs, 1, 2, 85, 100, 0, 40, 4, 4)
-        gss["panel_proj_learning"] = self.get_axs(proj_grids, sharey="all")
+        gss["panel_proj_learning"] = self.get_axs(
+            proj_grids, sharey="all", squeeze=True
+        )
 
         self.gss = gss
 
