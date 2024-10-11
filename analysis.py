@@ -504,6 +504,7 @@ def joint_variable_decoder(
     test_inds = []
     feats = []
     session_info = []
+    ests_all = []
     trial_info = []
     for i, pop_i in enumerate(pops):
         fv_i = feature_vars[i]
@@ -532,6 +533,7 @@ def joint_variable_decoder(
                 **kwargs,
             )
             ests = out["estimators"]
+            ests_all.append(ests)
             test_inds.append(out["test_inds"])
             n_neur_i = pop_i.shape[0]
             dv_i = np.zeros(dv_shape)
@@ -552,6 +554,7 @@ def joint_variable_decoder(
         "feats": feats,
         "session_info": session_info,
         "trial_info": trial_info,
+        "estimators": ests_all,
     }
     return out_dict
 
