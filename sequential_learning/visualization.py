@@ -4,11 +4,60 @@ import itertools as it
 
 import sklearn.decomposition as skd
 import sklearn.linear_model as sklm
+import sklearn.preprocessing as skp
 
 import general.plotting as gpl
 import general.utility as u
 import sequential_learning.analysis as sla
 import sequential_learning.auxiliary as slaux
+
+
+@gpl.ax_adder()
+def plot_shape_scatter(
+    pops,
+    k1,
+    k2,
+    comb="{}post{}",
+    first_sess=0,
+    last_sess=-1,
+    ax=None,
+    norm_time=-250,
+    quant_time=250,
+    color1="r",
+    color2="g",
+    func=np.mean,
+):
+    k1k2_comb = comb.format(k1, k2)
+
+    p1, xs = pops[k1]
+    p2, xs = pops[k2]
+    p12, xs = pops[k1k2_comb]
+    norm_ind = np.argmin((xs - norm_time) ** 2)
+    quant_ind = np.argmin((xs - quant_time) ** 2)
+
+    pops = []
+    for p in (p1, p2, p12):
+        p_first = np.swapaxes(np.squeeze(p[first_sess]), 0, 1)
+        s_first = skp.StandardScaler().fit(p_first[..., norm_ind])
+        pop_first = func(s_first.transform(p_first[..., quant_ind]), axis=0)
+        p_last = np.swapaxes(np.squeeze(p[last_sess]), 0, 1)
+        s_last = skp.StandardScaler().fit(p_last[..., norm_ind])
+        pop_last = func(s_last.transform(p_last[..., quant_ind]), axis=0)
+        pops.append(
+            (np.expand_dims(pop_first, -1), np.expand_dims(pop_last, -1))
+        )
+    (_, pop_k1_early), (pop_k2_early, pop_k2_late), (pop_k1_late, _) = pops
+
+    k1_el = np.concatenate((pop_k1_early, pop_k1_late), axis=1)
+    k2_el = np.concatenate((pop_k2_early, pop_k2_late), axis=1)
+    ax.plot(k1_el.T, k2_el.T, color=(0.9, 0.9, 0.9))
+    ax.plot(k1_el[:, 0], k2_el[:, 0], "o", color=color1, label="early")
+    ax.plot(k1_el[:, 1], k2_el[:, 1], "o", color=color2, label="late")
+    gpl.clean_plot(ax, 0)
+    ax.set_aspect("equal")
+    ax.set_ylabel("activity for shape {}".format(k2))
+    ax.set_xlabel("activity for shape {}".format(k1))
+    ax.legend(frameon=False)
 
 
 @gpl.ax_adder()
@@ -231,6 +280,9 @@ def project_features_common(
             vmax=vmax,
         )
     ax.set_aspect("equal")
+    ax.set_xlabel("dim 1")
+    ax.set_ylabel("dim 2")
+    ax.set_zlabel("dim 3")
     return f, ax
 
 
@@ -333,8 +385,8 @@ def plot_shape_transition_performance(
     plot_len=100,
     gap=20,
     cmaps=None,
-    cbound_begin = (0.3, 0.55),
-    cbound_end = (0.65, 0.99),
+    cbound_begin=(0.3, 0.55),
+    cbound_end=(0.65, 0.99),
 ):
     if cmaps is None:
         cmaps = (None,) * len(data_dict)

@@ -348,18 +348,19 @@ class RelativeTransitionFigure(SequenceLearningFigure):
             color_maps=color_maps,
             ax=vis_ax,
         )
-
+        
         if self.save_video:
             f, ax = slv.project_features_common(
                 (dv_s1, dv_s2),
                 *projs,
                 color_maps=color_maps,
             )
+            gpl.clean_3d_plot(ax)
             fp = os.path.join(
                 self.fig_folder,
                 "vis_{}-{}.mp4".format(*self.shape_sequence),
             )
-            gpl.rotate_3d_plot(f, ax, fp, fps=30)
+            gpl.rotate_3d_plot(f, ax, fp, fps=30, n_frames=200, dpi=300)
 
         v_a2 = u.make_unit_vector(out[s1]["dvs"][-1][..., 0, 0])
         v_a2_i = u.make_unit_vector(out[s1]["dvs"][-2][..., 0, 0])

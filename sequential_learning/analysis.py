@@ -10,6 +10,37 @@ import general.neural_analysis as na
 import sequential_learning.auxiliary as slaux
 
 
+def get_shape_resps(
+    data,
+    time_zero_field="stim_on",
+    tbeg=-500,
+    tend=0,
+    winsize=500,
+    regions=("IT",),
+    min_neurs=1,
+    min_trls=10,
+):
+    out_dict = {}
+    for k, v in data.items():
+        pops, xs = v.get_neural_activity(
+            winsize,
+            tbeg,
+            tend,
+            time_zero_field=time_zero_field,
+            regions=regions,
+            skl_axes=True,
+        )
+        pops_save = []
+        for pop in pops:
+            if pop.shape[0] > min_neurs and pop.shape[2] > min_trls:
+                channel_mask = np.squeeze(
+                    np.any(np.std(pop, axis=2) > 0, axis=-1)
+                )
+                pops_save.append(pop[channel_mask])
+        out_dict[k] = pops_save, xs
+    return out_dict
+
+
 def uniform_sample_mask(data, **kwargs):
     mask = slaux.sample_uniform_mask(data, **kwargs)
     data = data.mask(mask)
@@ -369,13 +400,9 @@ def choice_projection_tc(
     p_s2 = s2["pops"][s2_ind][..., t_ind]
     if use_all_dv_ind:
         dv_s1 = s1["dvs"][s1_dv_ind][..., t_ind]
-        dv_s1 = np.concatenate(
-            list(dv_s1[..., j] for j in range(dv_s1.shape[-1]))
-        )
+        dv_s1 = np.concatenate(list(dv_s1[..., j] for j in range(dv_s1.shape[-1])))
         dv_s2 = s1["dvs"][s2_dv_ind][..., t_ind]
-        dv_s2 = np.concatenate(
-            list(dv_s2[..., j] for j in range(dv_s2.shape[-1]))
-        )
+        dv_s2 = np.concatenate(list(dv_s2[..., j] for j in range(dv_s2.shape[-1])))
     else:
         dv_s1 = s1["dvs"][s1_dv_ind][..., dv_ind, t_ind]
         dv_s2 = s2["dvs"][s2_dv_ind][..., dv_ind, t_ind]
@@ -406,12 +433,12 @@ def choice_projection_tc(
     preds_s2_on_s1 = m_s1.predict(proj_te_s2)
     corr_traj["s1 on s1"] = s1 = preds_s1_on_s1 == c_te_s1
     corr_traj["s2 on s1"] = preds_s2_on_s1 == c_te_s2
-    corr_traj["s1 corr"] =  t_s1_te == c_te_s1
-    
+    corr_traj["s1 corr"] = t_s1_te == c_te_s1
+
     m_s2 = sklm.LogisticRegression()
     proj_tr, c_tr = projs_s2_to_s2[test_trls:], c_s2[test_trls:]
     if both_start:
-        proj_te_s1, c_te_s1 = projs_s1_to_s2[:test_trls], c_s1[:test_trls]        
+        proj_te_s1, c_te_s1 = projs_s1_to_s2[:test_trls], c_s1[:test_trls]
     else:
         proj_te_s1, c_te_s1 = projs_s1_to_s2[-test_trls:], c_s1[-test_trls:]
     proj_te_s2, c_te_s2 = projs_s2_to_s2[:test_trls], c_s2[:test_trls]
@@ -427,7 +454,7 @@ def choice_projection_tc(
     for k, traj in corr_traj.items():
         smooth_corr_traj[k] = np.convolve(traj, filt, mode="valid")
     return smooth_corr_traj
-    
+
 
 def joint_variable_shape_sequence(
     data_dict,
