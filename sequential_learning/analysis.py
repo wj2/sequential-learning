@@ -1,5 +1,6 @@
 import itertools as it
 import numpy as np
+import scipy.stats as sts
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
 import sklearn.linear_model as sklm
@@ -33,9 +34,7 @@ def get_shape_resps(
         pops_save = []
         for pop in pops:
             if pop.shape[0] > min_neurs and pop.shape[2] > min_trls:
-                channel_mask = np.squeeze(
-                    np.any(np.std(pop, axis=2) > 0, axis=-1)
-                )
+                channel_mask = np.squeeze(np.any(np.std(pop, axis=2) > 0, axis=-1))
                 pops_save.append(pop[channel_mask])
         out_dict[k] = pops_save, xs
     return out_dict
@@ -456,6 +455,25 @@ def choice_projection_tc(
     return smooth_corr_traj
 
 
+def _uniform_labels(
+    data, fields=("cat_proj", "anticat_proj"), min_chamber=10, range_=(-1, 1), n_bins=3
+):
+    group = data[list(fields)]
+    out_labels = []
+    out_pass = []
+    for g in group:
+        bin_counts, _, labels = sts.binned_statistic_dd(
+            g.to_numpy(),
+            np.ones(len(g)),
+            statistic="sum",
+            range=(range_,) * len(fields),
+            bins=n_bins,
+        )
+        out_pass.append(np.all(bin_counts >= min_chamber))
+        out_labels.append(labels)
+    return out_labels, out_pass
+
+
 def joint_variable_shape_sequence(
     data_dict,
     shapes=None,
@@ -465,10 +483,11 @@ def joint_variable_shape_sequence(
     binstep=500,
     regions=("IT",),
     time_zero_field="stim_on",
-    stim_field="stim_feature_MAIN",
+    stim_field=("chosen_cat", "cat_proj", "anticat_proj"),
     keep_session_info=("date",),
     uniform_resample=False,
     uniform_kwargs=None,
+    balance_field=None,
     keep_trial_info=("chosen_cat", "stim_sample_MAIN"),
     **kwargs,
 ):
@@ -480,7 +499,13 @@ def joint_variable_shape_sequence(
         if uniform_resample:
             if uniform_kwargs is None:
                 uniform_kwargs = {}
-            data_use = uniform_sample_mask(data_use, **uniform_kwargs)
+            kwargs["balance_rel_fields"] = True
+            labels, passing = _uniform_labels(
+                data_use, **uniform_kwargs
+            )
+            data_use = data_use.session_mask(passing)
+            labels = list(label for i, label in enumerate(labels) if passing[i])
+            kwargs["rel_flat_all"] = labels
         pops, xs = data_use.get_neural_activity(
             binsize,
             t_start,
@@ -494,7 +519,7 @@ def joint_variable_shape_sequence(
             feats = list(np.array(x) for x in data_use[stim_field])
         else:
             feats = list(np.stack(x, axis=0) for x in data_use[stim_field])
-        session_info = data_use[list(keep_session_info)]
+        session_info = data_use[list(keep_session_info)].to_numpy()
         trial_info = data_use[list(keep_trial_info)]
         session_dict = joint_variable_decoder(
             pops,
@@ -507,6 +532,83 @@ def joint_variable_shape_sequence(
     return out_dict
 
 
+def combined_choice_decoder(
+    data_dict,
+    shapes=None,
+    t_start=0,
+    t_end=0,
+    binsize=500,
+    binstep=500,
+    regions=("IT",),
+    time_zero_field="stim_on",
+    stim_field=("chosen_cat", "cat_proj", "anticat_proj"),
+    keep_session_info=("date",),
+    uniform_resample=False,
+    uniform_kwargs=None,
+    balance_field=None,
+    keep_trial_info=("chosen_cat", "stim_sample_MAIN", "stim_feature_MAIN"),
+    last_n_sessions=1,
+    **kwargs,
+):
+    if shapes is None:
+        shapes = list(data_dict.keys())
+    out_dict = {}
+    pre_pops = []
+    pre_feats = []
+    pre_session_info = []
+    pre_trial_info = []
+
+    labels_all = []
+    for shape in shapes:
+        data_use = data_dict[shape]
+        use_days = np.unique(data_use["day"])[-last_n_sessions:]
+        data_use = data_use.session_mask(np.isin(data_use["day"], use_days))
+        if uniform_resample:
+            if uniform_kwargs is None:
+                uniform_kwargs = {}
+            labels, passing = _uniform_labels(
+                data_use, **uniform_kwargs
+            )
+            data_use = data_use.session_mask(passing)
+            labels = list(label for i, label in enumerate(labels) if passing[i])
+        pops, xs = data_use.get_neural_activity(
+            binsize,
+            t_start,
+            t_end,
+            binstep,
+            skl_axes=True,
+            time_zero_field=time_zero_field,
+            regions=regions,
+        )
+        feats = data_use[list(stim_field)]
+        session_info = data_use[list(keep_session_info)]
+        trial_info = data_use[list(keep_trial_info)]
+        for i, pop in enumerate(pops):
+            if pop.shape[0] > 0:
+                pre_pops.append(na.zscore_tc(pop)[0])
+                pre_feats.append(feats[i])
+                pre_session_info.append(session_info.iloc[i])
+                pre_trial_info.append(trial_info[i])
+                if uniform_resample:
+                    labels_all.append(labels[i])
+    shapes_comb = "-".join(shapes)
+    pre_pops_comb = np.concatenate(pre_pops, axis=2)
+    pre_feats_comb = np.concatenate(pre_feats, axis=0)
+    pre_trial_info_comb = np.concatenate(pre_trial_info, axis=0)
+    if uniform_resample:
+        kwargs["balance_rel_fields"] = True
+        kwargs["rel_flat_all"] = np.concatenate(labels_all, axis=0)
+    session_dict = joint_variable_decoder(
+        [pre_pops_comb],
+        [pre_feats_comb],
+        keep_trial_info=pre_trial_info_comb,
+        indiv_zscore=False,
+        **kwargs,
+    )
+    out_dict[shapes_comb] = session_dict
+    return out_dict
+
+
 def joint_variable_decoder(
     pops,
     feature_vars,
@@ -516,6 +618,7 @@ def joint_variable_decoder(
     n_folds=20,
     min_trials=100,
     indiv_zscore=True,
+    rel_flat_all=None,
     **kwargs,
 ):
     if shape_labels is None:
@@ -535,6 +638,8 @@ def joint_variable_decoder(
     trial_info = []
     for i, pop_i in enumerate(pops):
         fv_i = feature_vars[i]
+        if rel_flat_all is not None:
+            kwargs["rel_flat"] = rel_flat_all[i]
         if len(fv_i) >= min_trials and pop_i.shape[0] > 0:
             labels_i = []
             for j in range(fv_i.shape[1]):
@@ -546,7 +651,7 @@ def joint_variable_decoder(
             labels_i = np.stack(labels_i, axis=1)
             if indiv_zscore:
                 (pop_i,) = na.zscore_tc(pop_i)
-            pop_i = np.squeeze(pop_i)
+            pop_i = np.squeeze(pop_i, axis=1)
             proc_pops.append(pop_i)
             feats.append(fv_i)
             out = na.fold_skl_flat(
@@ -572,7 +677,7 @@ def joint_variable_decoder(
                 )
                 dv_i[k, :n_neur_i, :, l_] = coefs.T
             dec_vecs.append(dv_i)
-            session_info.append(shape_labels.iloc[i])
+            session_info.append(shape_labels[i])
             trial_info.append(keep_trial_info[i])
     out_dict = {
         "dvs": dec_vecs,
@@ -585,6 +690,14 @@ def joint_variable_decoder(
     }
     return out_dict
 
+
+def combined_pregen_decoder(data_dict, pre_shapes, gen_shape, **kwargs):
+    out_dict = {}
+    out_pre = combined_choice_decoder(data_dict, shapes=pre_shapes, **kwargs)
+    out_gen = joint_variable_shape_sequence(data_dict, shapes=(gen_shape,), **kwargs)
+    out_dict.update(out_gen)
+    out_dict.update(out_pre)
+    return out_dict
 
 def resample_uniform_performance(
     data, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000

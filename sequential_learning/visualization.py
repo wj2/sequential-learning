@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools as it
+import scipy.signal as ssig
 
 import sklearn.decomposition as skd
 import sklearn.linear_model as sklm
@@ -43,9 +44,7 @@ def plot_shape_scatter(
         p_last = np.swapaxes(np.squeeze(p[last_sess]), 0, 1)
         s_last = skp.StandardScaler().fit(p_last[..., norm_ind])
         pop_last = func(s_last.transform(p_last[..., quant_ind]), axis=0)
-        pops.append(
-            (np.expand_dims(pop_first, -1), np.expand_dims(pop_last, -1))
-        )
+        pops.append((np.expand_dims(pop_first, -1), np.expand_dims(pop_last, -1)))
     (_, pop_k1_early), (pop_k2_early, pop_k2_late), (pop_k1_late, _) = pops
 
     k1_el = np.concatenate((pop_k1_early, pop_k1_late), axis=1)
@@ -186,8 +185,8 @@ def plot_all_cross_projections(*dvs, cmaps=None, color_bounds=(0.2, 0.9), **kwar
 
 
 def plot_cross_projection(*dvs, ref_inds=None, axs=None, fwid=3, t_ind=0, **kwargs):
+    n = len(dvs)
     if axs is None:
-        n = len(dvs)
         f, axs = plt.subplots(n, n, figsize=(n * fwid, n * fwid), sharey=True)
     if ref_inds is None:
         ref_inds = (-1,) * len(dvs)
@@ -219,6 +218,11 @@ def plot_cross_projection(*dvs, ref_inds=None, axs=None, fwid=3, t_ind=0, **kwar
         gpl.plot_trace_werr(
             np.arange(sim.shape[1]), sim, ax=axs[ind], confstd=True, **kwargs
         )
+        gpl.clean_plot(axs[ind], ind[1])
+        if ind[0] == 0:
+            axs[ind].set_ylabel("alignment index")
+        if ind[1] == n - 1:
+            axs[ind].set_xlabel("session number")
     return axs
 
 
@@ -287,6 +291,117 @@ def project_features_common(
 
 
 @gpl.ax_adder()
+def feature_projection_scatter_color(
+    ref,
+    new,
+    ref_ind=-1,
+    new_ind=0,
+    t_ind=0,
+    dv_ind=0,
+    choice_ind=0,
+    corr_ind=1,
+    inc_frac=2,
+    pt_size=2,
+    outline_ind=0,
+    ax=None,
+):
+    choice_dim = ref["dvs"][ref_ind][..., dv_ind, t_ind]
+    pop_i = new["pops"][new_ind][..., t_ind]
+
+    proj = choice_dim @ pop_i
+    info = new["trial_info"][new_ind].to_numpy()
+    outline = info[:, outline_ind]
+    feats = new["feats"][new_ind]
+    bound = np.max(np.abs(proj))
+    ax.scatter(
+        *feats[:, 1:].T,
+        c=outline,
+        cmap="bwr",
+        s=pt_size * inc_frac,
+    )
+    ax.scatter(
+        *feats[:, 1:].T,
+        c=np.mean(proj, axis=0),
+        cmap="bwr",
+        vmin=-bound,
+        vmax=bound,
+        s=pt_size,
+    )
+    ax.set_aspect("equal")
+    gpl.clean_plot(ax, 1)
+    gpl.clean_plot_bottom(ax)
+
+
+@gpl.ax_adder()
+def feature_projection_hist(
+    ref,
+    new,
+    ref_ind=-1,
+    new_ind=0,
+    t_ind=0,
+    dv_ind=0,
+    choice_ind=0,
+    corr_ind=1,
+    inc_frac=2,
+    pt_size=2,
+    outline_ind=0,
+    ax=None,
+    n_trls=5,
+):
+    choice_dim = ref["dvs"][ref_ind][..., dv_ind, t_ind]
+    pop_i = new["pops"][new_ind][..., t_ind]
+
+    proj = choice_dim @ pop_i
+    info = new["trial_info"][new_ind].to_numpy()
+    outline = info[:, outline_ind]
+
+    ax.hist(np.mean(proj, axis=0)[outline == 1][:n_trls], density=True)
+    ax.hist(np.mean(proj, axis=0)[outline == 2][:n_trls], density=True)
+
+
+@gpl.ax_adder()
+def feature_projection_tc(
+    ref,
+    new,
+    ref_ind=-1,
+    new_ind=0,
+    t_ind=0,
+    dv_ind=0,
+    choice_ind=0,
+    cat_ind=1,
+    inc_frac=2,
+    pt_size=2,
+    ax=None,
+    n_trls=5,
+    trl_win=100,
+):
+    ests = ref["estimators"][ref_ind][..., t_ind]
+    pop_i = new["pops"][new_ind][..., t_ind]
+
+    preds = np.stack(list(est.predict(pop_i.T) for est in ests), axis=0)
+    info = new["trial_info"][new_ind].to_numpy()
+    choice = info[:, choice_ind] > 1.5
+    pred = preds[..., dv_ind] == choice[None]
+    corr_cat = info[:, cat_ind] > 1.5
+    corr_choice = np.expand_dims(choice == corr_cat, 0)
+    pred_corr = preds[..., dv_ind] == corr_cat[None]
+
+    filt = np.ones((1, trl_win))
+    pred_filt = ssig.convolve(pred, filt / np.sum(filt), mode="valid")
+
+    corr_filt = ssig.convolve(corr_choice, filt / np.sum(filt), mode="valid")
+
+    pcorr_filt = ssig.convolve(pred_corr, filt / np.sum(filt), mode="valid")
+
+    trl = np.arange(pred_filt.shape[1])
+    gpl.plot_trace_werr(trl, corr_filt, ax=ax, label="correct choice")
+    gpl.plot_trace_werr(trl, pcorr_filt, ax=ax, label="correct prediction from ref")
+    gpl.plot_trace_werr(trl, pred_filt, ax=ax, confstd=True, label="choice follows ref")
+
+    gpl.add_hlines(0.5, ax)
+
+
+@gpl.ax_adder()
 def choice_projections(
     dv_reference,
     target_activity,
@@ -315,6 +430,72 @@ def choice_projections(
     ax.set_xlabel("projection onto decision axis")
     ax.set_ylabel("average choice")
     return lr
+
+
+@gpl.ax_adder()
+def plot_choice_corr(
+    dvs,
+    ref_dv=None,
+    session_ts=None,
+    choice_ind=0,
+    opt_ind=1,
+    ref_ind=0,
+    t_ind=0,
+    ax=None,
+    **kwargs,
+):
+    corrs = np.zeros((dvs[0].shape[0], len(dvs)))
+    refs = np.zeros_like(corrs)
+    refs_opt = np.zeros_like(corrs)
+
+    if session_ts is None:
+        session_ts = np.arange(len(dvs))
+    for i, dv in enumerate(dvs):
+        dv_t = dv[..., t_ind]
+        cv = u.make_unit_vector(dv_t[..., choice_ind])
+        ov = u.make_unit_vector(dv_t[..., opt_ind])
+        corrs[:, i] = np.sum(cv * ov, axis=1)
+        if ref_dv is not None:
+            rd = u.make_unit_vector(ref_dv[..., ref_ind, t_ind])
+            refs[:, i] = np.sum(cv * rd, axis=1)
+            refs_opt[:, i] = np.sum(ov * rd, axis=1)
+    gpl.plot_trace_werr(session_ts, corrs, ax=ax, confstd=True, **kwargs)
+    if ref_dv is not None:
+        _ = kwargs.pop("label", None)
+        gpl.plot_trace_werr(
+            session_ts, refs, ax=ax, confstd=True, label="ref", **kwargs
+        )
+        gpl.plot_trace_werr(
+            session_ts, refs_opt, ax=ax, confstd=True, label="ref opt", **kwargs
+        )
+    gpl.add_hlines(0, ax)
+
+
+@gpl.ax_adder()
+def plot_dv_corr(
+    dvs,
+    use_ind=0,
+    t_ind=0,
+    session_ts=None,
+    ax=None,
+    color_bounds=(0.2, 0.99),
+    cmap="Blues",
+):
+    if session_ts is None:
+        session_ts = np.arange(len(dvs))
+    corrs = np.zeros((len(dvs), len(dvs), dvs[0].shape[0]))
+    for i, dv_i in enumerate(dvs):
+        for j, dv_j in enumerate(dvs):
+            if i == j:
+                corrs[i, j] = np.nan
+            else:
+                x_i = u.make_unit_vector(dv_i[..., use_ind, t_ind])
+                x_j = u.make_unit_vector(dv_j[..., use_ind, t_ind])
+                corrs[i, j] = np.sum(x_i * x_j, axis=1)
+    colors = plt.get_cmap(cmap)(np.linspace(*color_bounds, len(corrs)))
+    for i, corrs_i in enumerate(corrs):
+        gpl.plot_trace_werr(session_ts, corrs_i.T, ax=ax, confstd=True, color=colors[i])
+    gpl.add_hlines(0, ax)
 
 
 @gpl.axs_adder(1, 3)

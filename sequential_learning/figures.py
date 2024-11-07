@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.stats as sts
 
 import general.data_io as gio
 import general.paper_utilities as pu
@@ -10,7 +11,7 @@ import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
 import sequential_learning.visualization as slv
 
-config_path = "sequential_learning/figures.conf"
+config_path = "sequential_learning/sequential_learning/figures.conf"
 colors = (
     np.array(
         [
@@ -172,6 +173,163 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 1])
 
 
+class DecisionLearning(SequenceLearningFigure):
+    def __init__(
+        self,
+        pre_shapes=None,
+        gen_shape=None,
+        fig_key="decision_learning_figure",
+        exper_data=None,
+        region="IT",
+        fig_folder="",
+        uniform_resample=False,
+        min_trials=100,
+        use_fields=("chosen_cat", "cat_proj", "anticat_proj"),
+        **kwargs,
+    ):
+        fsize = (10, 8)
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.region = (region,)
+        self.fig_folder = fig_folder
+        self.uniform_resample = uniform_resample
+        self.min_trials = min_trials
+        self.use_fields = list(use_fields)
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+            self.shape_sequence = list(exper_data.keys())
+        elif pre_shapes is not None and gen_shape is not None:
+            self.shape_sequence = tuple(pre_shapes) + (gen_shape,)
+        else:
+            raise IOError("either data or shape list must be provided")
+        if pre_shapes is None and gen_shape is None:
+            self.pre_shapes = self.shape_sequence[:-1]
+            self.gen_shape = self.shape_sequence[-1]
+        else:
+            self.pre_shapes = pre_shapes
+            self.gen_shape = gen_shape
+        self.pre_key = "-".join(self.pre_shapes)
+        self.gen_key = self.gen_shape
+        super().__init__(fsize, params, colors=colors, **kwargs)
+
+    def make_gss(self):
+        gss = {}
+
+        data_dict = self.load_shape_groups()
+        n_sessions = len(np.unique(data_dict[self.gen_key]["day"]))
+        n_grid = int(np.ceil(np.sqrt(n_sessions)))
+        proj_grid = pu.make_mxn_gridspec(
+            self.gs,
+            n_grid,
+            n_grid,
+            0,
+            70,
+            0,
+            100,
+            2,
+            2,
+        )
+        proj_axs = self.get_axs(proj_grid, squeeze=True, sharex="all", sharey="all")
+        gss["panel_proj"] = proj_axs
+
+        overlap_grid = pu.make_mxn_gridspec(self.gs, 1, 1, 75, 100, 0, 40, 2, 2)
+        overlap_axs = self.get_axs(
+            overlap_grid,
+            sharex="all",
+            sharey="all",
+        )
+        gss["panel_overlap"] = overlap_axs[0, 0]
+
+        self.gss = gss
+
+    def _analysis(self):
+        data_dict = self.load_shape_groups()
+        fkey = ("main_analysis", self.pre_key, self.gen_key)
+        if self.data.get(fkey) is None:
+            t_start = self.params.getfloat("t_start")
+            t_end = self.params.getfloat("t_end")
+            binsize = self.params.getfloat("binsize")
+            binstep = self.params.getfloat("binstep")
+            out = sla.combined_pregen_decoder(
+                data_dict,
+                self.pre_shapes,
+                self.gen_shape,
+                regions=self.region,
+                t_start=t_start,
+                t_end=t_end,
+                binsize=binsize,
+                binstep=binstep,
+                uniform_resample=self.uniform_resample,
+                stim_field=self.use_fields,
+                min_trials=self.min_trials,
+            )
+            self.data[fkey] = out
+        return self.data[fkey]
+
+    def panel_proj(self):
+        key = "panel_proj"
+        axs = self.gss[key].flatten()
+
+        s_pt = self.params.getfloat("pt_size")
+        kde_range = self.params.getlist("kde_range", typefunc=float)
+        n_pts = self.params.getint("kde_points")
+        colormap = plt.get_cmap(self.params.get("colormap"))
+
+        pts = np.linspace(*kde_range, n_pts)
+        xs, ys = np.meshgrid(pts, pts)
+        xs_flat = np.reshape(xs, (-1,))
+        ys_flat = np.reshape(ys, (-1,))
+        pts_eval = np.stack((xs_flat, ys_flat), axis=0)
+
+        out_dict = self._analysis()
+        dv_ind = 0
+        t_ind = 0
+        pre_vec = out_dict[self.pre_key]["dvs"][0][..., dv_ind, t_ind]
+        post_vec = out_dict[self.gen_key]["dvs"][-1][..., dv_ind, t_ind]
+        for i, pop_i in enumerate(out_dict[self.gen_key]["pops"]):
+            feat_i = out_dict[self.gen_key]["feats"][i][:, dv_ind]
+            pop_i = pop_i[..., t_ind]
+            pre_proj = pre_vec @ pop_i
+            post_proj = post_vec @ pop_i
+            pts_mu = np.mean(np.stack((pre_proj, post_proj), axis=-1), axis=0)
+            feat_vals = np.unique(feat_i)
+            maps = np.zeros((len(feat_vals), n_pts, n_pts))
+            for j, fv in enumerate(feat_vals):
+                kde_i = sts.gaussian_kde(pts_mu[feat_i == fv].T)
+                maps[j] = np.reshape(kde_i(pts_eval), (n_pts, n_pts))
+
+            map_diff = maps[1] - maps[0]
+            extreme = np.max(np.abs(map_diff))
+            axs[i].pcolormesh(
+                pts, pts, map_diff, vmin=-extreme, vmax=extreme, cmap=colormap
+            )
+            axs[i].scatter(
+                *pts_mu.T,
+                c=feat_i,
+                s=s_pt,
+                alpha=0.1,
+                cmap=colormap,
+            )
+            axs[i].set_aspect("equal")
+            gpl.clean_plot(axs[i], i)
+
+    def panel_overlap(self):
+        key = "panel_overlap"
+        ax = self.gss[key]
+
+        out_dict = self._analysis()
+        slv.plot_choice_corr(
+            out_dict[self.gen_key]["dvs"],
+            ax=ax,
+            ref_dv=out_dict[self.pre_key]["dvs"][-1],
+        )
+
+
 class RelativeTransitionFigure(SequenceLearningFigure):
     def __init__(
         self,
@@ -316,6 +474,8 @@ class RelativeTransitionFigure(SequenceLearningFigure):
             gpl.clean_plot(t_axs[i], 1)
             gpl.clean_plot_bottom(t_axs[i])
         gpl.add_vlines(ang_vecs[0] @ ang_vecs[1], ang_ax)
+        ang_ax.set_xlabel("task alignment")
+        gpl.clean_plot(ang_ax, 1)
 
     def panel_dec(self):
         key = "panel_dec"
@@ -348,7 +508,7 @@ class RelativeTransitionFigure(SequenceLearningFigure):
             color_maps=color_maps,
             ax=vis_ax,
         )
-        
+
         if self.save_video:
             f, ax = slv.project_features_common(
                 (dv_s1, dv_s2),
@@ -367,9 +527,13 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         v_a3 = u.make_unit_vector(out[s2]["dvs"][0][..., 0, 0])
         v_a3_i = u.make_unit_vector(out[s2]["dvs"][1][..., 0, 0])
 
-        ang_ax.hist((v_a2 @ v_a3.T).flatten())
-        ang_ax.hist((v_a2_i @ v_a2.T).flatten())
-        ang_ax.hist((v_a3_i @ v_a3.T).flatten())
+        ang_ax.hist((v_a2 @ v_a3.T).flatten(), density=True)
+        ang_ax.hist((v_a2_i @ v_a2.T).flatten(), density=True)
+        ang_ax.hist((v_a3_i @ v_a3.T).flatten(), density=True)
+
+        ang_ax.set_xlabel("decision vector overlap")
+        ang_ax.set_ylabel("density")
+        gpl.clean_plot(ang_ax, 0)
 
     def video_test(self):
         f, ax = plt.subplots(1, 1, subplot_kw={"projection": "3d"})
