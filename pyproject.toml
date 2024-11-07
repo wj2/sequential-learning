@@ -33,6 +33,9 @@ dependencies = [
   "scikit-image~=0.22.0",
 ]
 
+[project.scripts]
+sl_decision = "sequential_learning.decision_script:main"
+
 [project.urls]
 Documentation = "https://github.com/wj2/sequential-learning#readme"
 Issues = "https://github.com/wj2/sequential-learning/issues"

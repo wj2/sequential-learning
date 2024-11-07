@@ -173,7 +173,7 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 1])
 
 
-class DecisionLearning(SequenceLearningFigure):
+class DecisionLearningFigure(SequenceLearningFigure):
     def __init__(
         self,
         pre_shapes=None,
