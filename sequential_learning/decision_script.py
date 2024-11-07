@@ -71,7 +71,8 @@ def main():
         use_fields = ("chosen_cat",)
 
     fig = slf.DecisionLearningFigure(
-        shapes=shapes,
+        pre_shapes=shapes[:-1],
+        gen_shape=shapes[-1],
         fig_folder=args.output_folder,
         region=args.region,
         uniform_resample=args.uniform_resample,
