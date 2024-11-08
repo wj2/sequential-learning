@@ -212,6 +212,7 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
         else:
             raise IOError("either data or shape must be provided")
 
+        self.params = params
         self.data = kwargs.pop("data", {})
         n_sessions = self._get_n_sessions()
         fsize = (fwid * 3, fwid * n_sessions)
