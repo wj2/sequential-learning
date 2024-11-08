@@ -230,7 +230,7 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
             2,
             2,
         )
-        proj_axs = self.get_axs(proj_grid, squeeze=True, sharex="all", sharey="all")
+        proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
         gss["panel_pattern"] = proj_axs
 
         self.gss = gss
