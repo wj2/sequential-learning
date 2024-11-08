@@ -34,7 +34,7 @@ class SequenceLearningFigure(pu.Figure):
     def only_load_shape_data(self, shape="A6", max_files=np.inf, validate=True):
         data = gio.Dataset.from_readfunc(
             slaux.load_kiani_data_folder,
-            os.path.join(self.params.get("data_folder"), shape),
+            slaux.BASEFOLDER,
             max_files=max_files,
             sort_by="day",
         )
