@@ -35,6 +35,7 @@ dependencies = [
 
 [project.scripts]
 sl_decision = "sequential_learning.decision_script:main"
+sl_extrapolation = "sequential_learning.extrapolation_script:main"
 
 [project.urls]
 Documentation = "https://github.com/wj2/sequential-learning#readme"

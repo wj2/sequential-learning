@@ -2,10 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import itertools as it
 import scipy.signal as ssig
+import scipy.stats as sts
 
 import sklearn.decomposition as skd
 import sklearn.linear_model as sklm
 import sklearn.preprocessing as skp
+import sklearn.svm as skm
 
 import general.plotting as gpl
 import general.utility as u
@@ -243,6 +245,95 @@ def average_similar_stimuli(
         weights = weight_func(feats[i], feats, **kwargs)
         new_reps[i] = np.sum(np.expand_dims(weights, 1) * reps, axis=0)
     return new_reps
+
+
+def make_average_map(
+    x_vals,
+    y_vals,
+    stim,
+    weights,
+    weight_func=_boxcar,
+    radius=0.2,
+):
+    xs, ys = np.meshgrid(x_vals, y_vals)
+    xs_flat = xs.flatten()
+    ys_flat = ys.flatten()
+
+    pts = np.stack((xs_flat, ys_flat), axis=1)
+    map_vals = np.zeros(len(pts))
+    for i, pt in enumerate(pts):
+        pt_i = np.sum(weights * weight_func(pt, stim, radius=radius), axis=0)
+        map_vals[i] = pt_i
+
+    map_use = map_vals.reshape((len(x_vals), len(y_vals)))
+    return map_use
+
+
+@gpl.ax_adder()
+def plot_gen_scatter(
+    feat_i,
+    feat_choice,
+    proj_i,
+    ax=None,
+    feat_dims=(1, 2),
+    cmap="bwr",
+    plot_choice=True,
+    choice_ind=0,
+    pt_size=5,
+    prop_inc=2,
+):
+    proj_max = np.max(np.abs(proj_i))
+    if plot_choice:
+        ax.scatter(*feat_i.T, c=feat_choice, cmap=cmap, s=pt_size * prop_inc)
+    ax.scatter(*feat_i.T, c=proj_i, cmap=cmap, vmin=-proj_max, vmax=proj_max, s=pt_size)
+    ax.set_aspect("equal")
+    gpl.add_hlines(0, ax)
+    gpl.add_vlines(0, ax, color="k")
+    gpl.clean_plot(ax, 1)
+    gpl.clean_plot_bottom(ax)
+
+
+@gpl.ax_adder()
+def plot_gen_map(feats, proj, ax=None, cmap="bwr", model=skm.SVC, n_pts=50):
+    m = model().fit(feats, proj)
+
+    bound = np.max(np.abs(feats))
+    pts = np.linspace(-bound, bound, n_pts)
+
+    xs, ys = np.meshgrid(pts, pts)
+    xs_flat = xs.reshape((-1,))
+    ys_flat = ys.reshape((-1,))
+    preds = m.decision_function(np.stack((xs_flat, ys_flat), axis=1))
+
+    preds = preds.reshape((n_pts, n_pts))
+    v_bound = np.max(np.abs(preds))
+    gpl.pcolormesh(pts, pts, preds, cmap=cmap, vmin=-v_bound, vmax=v_bound, ax=ax)
+    ax.set_aspect("equal")
+    gpl.add_hlines(0, ax)
+    gpl.add_vlines(0, ax, color="k")
+    gpl.clean_plot(ax, 1)
+    gpl.clean_plot_bottom(ax)
+
+
+@gpl.ax_adder()
+def plot_gen_map_average(
+    feats, proj, ax=None, cmap="bwr", model=skm.SVC, n_pts=50, vmin=None, vmax=None
+):
+    bound = np.max(np.abs(feats))
+    pts = np.linspace(-bound, bound, n_pts)
+
+    preds = make_average_map(pts, pts, feats, proj)
+    v_bound = np.max(np.abs(preds))
+    if vmin is None:
+        vmin = -v_bound
+    if vmax is None:
+        vmax = v_bound
+    gpl.pcolormesh(pts, pts, preds, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax)
+    ax.set_aspect("equal")
+    gpl.add_hlines(0, ax)
+    gpl.add_vlines(0, ax, color="k")
+    gpl.clean_plot(ax, 1)
+    gpl.clean_plot_bottom(ax)
 
 
 def project_features_common(

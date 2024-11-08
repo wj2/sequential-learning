@@ -500,9 +500,7 @@ def joint_variable_shape_sequence(
             if uniform_kwargs is None:
                 uniform_kwargs = {}
             kwargs["balance_rel_fields"] = True
-            labels, passing = _uniform_labels(
-                data_use, **uniform_kwargs
-            )
+            labels, passing = _uniform_labels(data_use, **uniform_kwargs)
             data_use = data_use.session_mask(passing)
             labels = list(label for i, label in enumerate(labels) if passing[i])
             kwargs["rel_flat_all"] = labels
@@ -566,9 +564,7 @@ def combined_choice_decoder(
         if uniform_resample:
             if uniform_kwargs is None:
                 uniform_kwargs = {}
-            labels, passing = _uniform_labels(
-                data_use, **uniform_kwargs
-            )
+            labels, passing = _uniform_labels(data_use, **uniform_kwargs)
             data_use = data_use.session_mask(passing)
             labels = list(label for i, label in enumerate(labels) if passing[i])
         pops, xs = data_use.get_neural_activity(
@@ -606,6 +602,116 @@ def combined_choice_decoder(
         **kwargs,
     )
     out_dict[shapes_comb] = session_dict
+    return out_dict
+
+
+def generalize_projection_pattern(
+    data,
+    dec_field,
+    gen_field,
+    t_start=0,
+    t_end=0,
+    binsize=500,
+    binstep=500,
+    regions=("IT",),
+    model=skm.LinearSVC,
+    time_zero_field="stim_on",
+    uniform_resample=False,
+    uniform_kwargs=None,
+    balance_field=None,
+    folds_n=20,
+    dec_ref=0,
+    gen_ref=0,
+    min_trials=100,
+    keep_feats=("chosen_cat", "cat_proj", "anticat_proj"),
+    **kwargs,
+):
+    if uniform_resample:
+        if uniform_kwargs is None:
+            uniform_kwargs = {}
+        labels, passing = _uniform_labels(data, **uniform_kwargs)
+        data = data.session_mask(passing)
+        labels = list(label for i, label in enumerate(labels) if passing[i])
+    pops, xs = data.get_neural_activity(
+        binsize,
+        t_start,
+        t_end,
+        binstep,
+        time_zero_field=time_zero_field,
+        regions=regions,
+        skl_axes=True,
+    )
+
+    dec_label = data[dec_field] > dec_ref
+
+    gen_cond = data[gen_field] > gen_ref
+    feats = data[list(keep_feats)]
+    gen_proj_all = []
+    test_proj_all = []
+    test_feats_all = []
+    gen_feats_all = []
+    full_outs = []
+    for i, pop in enumerate(pops):
+        mask1 = gen_cond[i]
+        labels = dec_label[i].to_numpy()
+        feats_i = feats[i].to_numpy()
+
+        pop1 = np.squeeze(pop[..., mask1, :], axis=1)
+        lab1 = labels[mask1]
+        feats1 = feats_i[mask1]
+
+        mask2 = np.logical_not(gen_cond[i])
+        pop2 = np.squeeze(pop[..., mask2, :], axis=1)
+        lab2 = labels[mask2]
+        feats2 = feats_i[mask2]
+        if (
+            pop1.shape[0] > 0
+            and pop1.shape[1] > min_trials
+            and pop2.shape[1] > min_trials
+        ):
+            out1 = na.fold_skl_flat(
+                pop1,
+                lab1,
+                folds_n,
+                c_gen=pop2,
+                l_gen=lab2,
+                model=model,
+                return_projection=True,
+                **kwargs,
+            )
+            
+            out2 = na.fold_skl_flat(
+                pop2,
+                lab2,
+                folds_n,
+                c_gen=pop1,
+                l_gen=lab1,
+                model=model,
+                return_projection=True,
+                **kwargs,
+            )
+            test_feats1 = feats1[out1["test_inds"]]
+            test_feats2 = feats2[out2["test_inds"]]
+            test_feats_all.append(np.concatenate((test_feats1, test_feats2), axis=2))
+            gen_feats_all.append(np.concatenate((feats2, feats1)))
+            gen_proj_all.append(
+                np.concatenate((out1["projection_gen"], out2["projection_gen"]), axis=1)
+            )
+            test_proj_all.append(
+                np.concatenate(
+                    (out1["projection"], out2["projection"]), axis=2,
+                )
+            )
+            full_outs.append((out1, out2))
+
+    out_dict = {
+        "feats_gen": gen_feats_all,
+        "proj_gen": gen_proj_all,
+        "feats_test": test_feats_all,
+        "proj_test": test_proj_all,
+        "xs": xs,
+        "full_out": full_outs,
+    }
     return out_dict
 
 
@@ -698,6 +804,7 @@ def combined_pregen_decoder(data_dict, pre_shapes, gen_shape, **kwargs):
     out_dict.update(out_gen)
     out_dict.update(out_pre)
     return out_dict
+
 
 def resample_uniform_performance(
     data, cho_field="chosen_cat", targ_field="stim_sample_MAIN", n_samps=1000
