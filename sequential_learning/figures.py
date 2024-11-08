@@ -32,15 +32,8 @@ class SequenceLearningFigure(pu.Figure):
         super().__init__(*args, find_panel_keys=False, **kwargs)
 
     def only_load_shape_data(self, shape="A6", max_files=np.inf, validate=True):
-        data = gio.Dataset.from_readfunc(
-            slaux.load_kiani_data_folder,
-            slaux.BASEFOLDER,
-            max_files=max_files,
-            sort_by="day",
-        )
-        if validate:
-            data = slaux.filter_valid(data)
-        return data
+        data_dict = slaux.load_shape_list((shape,))
+        return data_dict[shape]
 
     def load_shape_data(self, *args, **kwargs):
         if self.data.get("exper_data") is None:
