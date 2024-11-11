@@ -1,7 +1,5 @@
 import argparse
-import pickle
 from datetime import datetime
-import os
 
 import sequential_learning.figures as slf
 import sequential_learning.auxiliary as slaux
@@ -12,7 +10,7 @@ def create_parser():
         description="perform decoding analyses on Kiani data"
     )
     parser.add_argument("--data_folder", default=slaux.BASEFOLDER)
-    out_template = "extrap_{shape}_{jobid}"
+    out_template = "extrap_{dec_field}x{gen_field}_{shape}_{jobid}"
     parser.add_argument(
         "-o",
         "--output_template",
@@ -65,5 +63,10 @@ def main():
     )
     fig.panel_pattern()
 
-    fname = args.output_template.format(shape=shape, jobid=args.jobid)
+    fname = args.output_template.format(
+        shape=shape,
+        dec_field=args.dec_field,
+        gen_field=args.gen_field,
+        jobid=args.jobid,
+    )
     fig.save(fname + ".pdf", use_bf=args.output_folder)
