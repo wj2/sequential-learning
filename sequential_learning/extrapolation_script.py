@@ -10,7 +10,7 @@ def create_parser():
         description="perform decoding analyses on Kiani data"
     )
     parser.add_argument("--data_folder", default=slaux.BASEFOLDER)
-    out_template = "extrap_{dec_field}x{gen_field}_{shape}_{jobid}"
+    out_template = "extrap_{dec_field}-x-{gen_field}_{shape}_{jobid}"
     parser.add_argument(
         "-o",
         "--output_template",
@@ -30,6 +30,8 @@ def create_parser():
     parser.add_argument("--uniform_resample", default=False, action="store_true")
     parser.add_argument("--dec_field", default="chosen_cat", type=str)
     parser.add_argument("--gen_field", default="anticat_proj", type=str)
+    parser.add_argument("--use_prototypes", default=False, action="store_true")
+    parser.add_argument("--balance_complement", default=False, action="store_true")
     return parser
 
 
@@ -51,14 +53,30 @@ def main():
     else:
         shape = use_seq[args.sequence_ind]
     if args.dec_field == "cat_proj":
+        balance_field = "chosen_cat"
         dec_ref = 0
     elif args.dec_field == "chosen_cat":
         dec_ref = 1.5
+        balance_field = "cat_proj"
+
+    if args.balance_complement:
+        use_balance_field = balance_field
+    else:
+        use_balance_field = None
+
+    if args.use_prototypes:
+        gen_func = slaux.single_prototype_mask
+        gen_str = "prototype"
+    else:
+        gen_func = None
+        gen_str = args.gen_field
 
     fig = slf.BoundaryExtrapolationFigure(
         shape=shape,
         dec_field=args.dec_field,
         gen_field=args.gen_field,
+        gen_func=gen_func,
+        balance_field=use_balance_field,
         dec_ref=dec_ref,
     )
     fig.panel_pattern()
@@ -66,7 +84,7 @@ def main():
     fname = args.output_template.format(
         shape=shape,
         dec_field=args.dec_field,
-        gen_field=args.gen_field,
+        gen_field=gen_str,
         jobid=args.jobid,
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)

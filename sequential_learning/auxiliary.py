@@ -458,6 +458,7 @@ def get_strict_prototype_masks(
     min_cat_bound=0.42,
     max_cat_bound=0.71,
     ac_bound=0.141,
+    single_mask=False,
 ):
     masks = []
     for data in datas:
@@ -468,8 +469,18 @@ def get_strict_prototype_masks(
         m1 = m1.rs_and(ac_con)
         m2 = (cat > -max_cat_bound).rs_and(cat < -min_cat_bound)
         m2 = m2.rs_and(ac_con)
-        masks.append((m1, m2))
+        if single_mask:
+            ret_m = m1.rs_or(m2)
+        else:
+            ret_m = (m1, m2)
+        masks.append(ret_m)
     return masks
+
+
+def single_prototype_mask(
+        *args, **kwargs,
+):
+    return get_strict_prototype_masks(*args, single_mask=True, **kwargs)
 
 
 def get_prototype_masks(

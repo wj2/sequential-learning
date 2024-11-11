@@ -178,6 +178,8 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
         min_trials=100,
         dec_field="cat_proj",
         gen_field="anticat_proj",
+        balance_field=None,
+        gen_func=None,
         fwid=2,
         data=None,
         dec_ref=0,
@@ -193,7 +195,9 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
         self.min_trials = min_trials
         self.dec_field = dec_field
         self.gen_field = gen_field
+        self.gen_func = gen_func
         self.dec_ref = dec_ref
+        self.balance_field = balance_field
         if exper_data is not None:
             add_data = {"exper_data": exper_data}
             data = kwargs.get("data", {})
@@ -227,18 +231,18 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
             100,
             0,
             100,
-            2,
-            2,
+            1,
+            1,
         )
         proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
         gss["panel_pattern"] = proj_axs
 
         self.gss = gss
 
-    def _analysis(self):
+    def _analysis(self, recompute=False):
         data = self.load_shape_data(shape=self.shape)
         fkey = ("main_analysis", self.shape)
-        if self.data.get(fkey) is None:
+        if self.data.get(fkey) is None or recompute:
             t_start = self.params.getfloat("t_start")
             t_end = self.params.getfloat("t_end")
             binsize = self.params.getfloat("binsize")
@@ -246,12 +250,14 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
             out = sla.generalize_projection_pattern(
                 data,
                 self.dec_field,
-                self.gen_field,
+                gen_field=self.gen_field,
+                gen_func=self.gen_func,
                 regions=self.region,
                 t_start=t_start,
                 t_end=t_end,
                 binsize=binsize,
                 binstep=binstep,
+                balance_field=self.balance_field,
                 uniform_resample=self.uniform_resample,
                 min_trials=self.min_trials,
                 dec_ref=self.dec_ref,
@@ -259,11 +265,11 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
             self.data[fkey] = out
         return self.data[fkey]
 
-    def panel_pattern(self):
+    def panel_pattern(self, **kwargs):
         key = "panel_pattern"
         axs = self.gss[key]
 
-        out_dict = self._analysis()
+        out_dict = self._analysis(**kwargs)
         projs = out_dict["proj_gen"]
         feats = out_dict["feats_gen"]
         feat_dims = (1, 2)

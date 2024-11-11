@@ -608,7 +608,8 @@ def combined_choice_decoder(
 def generalize_projection_pattern(
     data,
     dec_field,
-    gen_field,
+    gen_field=None,
+    gen_func=None,
     t_start=0,
     t_end=0,
     binsize=500,
@@ -644,7 +645,16 @@ def generalize_projection_pattern(
 
     dec_label = data[dec_field] > dec_ref
 
-    gen_cond = data[gen_field] > gen_ref
+    if gen_func is not None:
+        gen_cond = gen_func(data)
+    elif gen_field is not None:
+        gen_cond = data[gen_field] > gen_ref
+    else:
+        raise IOError("one of gen_cond or gen_func must be set, both are None")
+    if balance_field is not None:
+        balance_vars = data[balance_field]
+    else:
+        balance_vars = (None,) * len(pops)
     feats = data[list(keep_feats)]
     gen_proj_all = []
     test_proj_all = []
@@ -664,6 +674,14 @@ def generalize_projection_pattern(
         pop2 = np.squeeze(pop[..., mask2, :], axis=1)
         lab2 = labels[mask2]
         feats2 = feats_i[mask2]
+
+        balance_i = balance_vars[i]
+        if balance_i is not None: 
+            balance1_i = np.stack((balance_i[mask1], lab1), axis=1)
+            balance2_i = np.stack((balance_i[mask2], lab2), axis=1)
+        else:
+            balance1_i = None
+            balance2_i = None
         if (
             pop1.shape[0] > 0
             and pop1.shape[1] > min_trials
@@ -677,6 +695,8 @@ def generalize_projection_pattern(
                 l_gen=lab2,
                 model=model,
                 return_projection=True,
+                rel_flat=balance1_i,
+                balance_rel_fields=balance1_i is not None,
                 **kwargs,
             )
             
@@ -688,6 +708,8 @@ def generalize_projection_pattern(
                 l_gen=lab1,
                 model=model,
                 return_projection=True,
+                rel_flat=balance2_i,
+                balance_rel_fields=balance2_i is not None,
                 **kwargs,
             )
             test_feats1 = feats1[out1["test_inds"]]
