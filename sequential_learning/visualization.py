@@ -247,6 +247,33 @@ def average_similar_stimuli(
     return new_reps
 
 
+def plot_full_generalization(
+    projs, feats, feat_dims=(1, 2), choice_dim=0, axs=None, fwid=2, average_folds=False
+):
+    if axs is None:
+        f, axs = plt.subplots(len(projs), 2, figsize=(fwid * 2, fwid * len(projs)))
+
+    for i, proj_i in enumerate(projs):
+        feats_i = np.reshape(feats[i], (-1, feats[i].shape[-1]))
+        rel_feats = feats_i[..., feat_dims]
+        rel_choice = feats_i[..., choice_dim]
+        if average_folds:
+            ax = (0, -1)
+        else:
+            ax = 1
+        proj_i = np.mean(proj_i, axis=ax).flatten()
+        plot_gen_map_average(
+            rel_feats,
+            rel_choice,
+            ax=axs[i, 0],
+            vmin=1,
+            vmax=2,
+        )
+        plot_gen_map_average(
+            rel_feats, proj_i > 0, ax=axs[i, 1], vmin=0, vmax=1
+        )
+
+
 def make_average_map(
     x_vals,
     y_vals,
@@ -704,6 +731,7 @@ def plot_cross_session_performance(
     gpl.add_hlines(0.5, ax)
     ax.set_xlabel("trial number")
     ax.set_ylabel("fraction correct")
+    gpl.clean_plot(ax, 0)
     return ax
 
 

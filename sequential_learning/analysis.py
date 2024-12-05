@@ -737,6 +737,95 @@ def generalize_projection_pattern(
     return out_dict
 
 
+
+def error_projection_pattern(
+    data,
+    dec_field,
+    t_start=0,
+    t_end=0,
+    binsize=500,
+    binstep=500,
+    regions=("IT",),
+    model=skm.LinearSVC,
+    time_zero_field="stim_on",
+    uniform_resample=False,
+    uniform_kwargs=None,
+    balance_field="chosen_cat",
+    folds_n=100,
+    dec_ref=0,
+    min_trials=100,
+    keep_feats=("chosen_cat", "cat_proj", "anticat_proj"),
+    **kwargs,
+):
+    if uniform_resample:
+        if uniform_kwargs is None:
+            uniform_kwargs = {}
+        labels, passing = _uniform_labels(data, **uniform_kwargs)
+        data = data.session_mask(passing)
+        labels = list(label for i, label in enumerate(labels) if passing[i])
+    pops, xs = data.get_neural_activity(
+        binsize,
+        t_start,
+        t_end,
+        binstep,
+        time_zero_field=time_zero_field,
+        regions=regions,
+        skl_axes=True,
+    )
+
+    dec_label = data[dec_field] > dec_ref
+
+    if balance_field is not None:
+        balance_vars = data[balance_field]
+    else:
+        balance_vars = (None,) * len(pops)
+    feats = data[list(keep_feats)]
+    test_proj_all = []
+    test_feats_all = []
+    full_outs = []
+    for i, pop in enumerate(pops):
+        labels = dec_label[i].to_numpy()
+        feats_i = feats[i].to_numpy()
+
+        pop = np.squeeze(pop, axis=1)
+        lab = labels
+
+        balance_i = balance_vars[i]
+        if balance_i is not None: 
+            balance_full_i = np.stack((balance_i, lab), axis=1)
+        else:
+            balance_full_i = None
+        if (
+            pop.shape[0] > 0
+            and pop.shape[1] > min_trials
+        ):
+            out = na.fold_skl_flat(
+                pop,
+                lab,
+                folds_n,
+                model=model,
+                return_projection=True,
+                rel_flat=balance_full_i,
+                balance_rel_fields=balance_full_i is not None,
+                **kwargs,
+            )
+            
+            test_feats = feats_i[out["test_inds"]]
+            test_feats_all.append(test_feats)
+            test_proj_all.append(
+                out["projection"]
+            )
+            full_outs.append(out)
+
+    out_dict = {
+        "feats_test": test_feats_all,
+        "proj_test": test_proj_all,
+        "xs": xs,
+        "full_out": full_outs,
+    }
+    return out_dict
+
+
 def joint_variable_decoder(
     pops,
     feature_vars,

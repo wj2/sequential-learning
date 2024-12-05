@@ -56,8 +56,8 @@ def main():
         balance_field = "chosen_cat"
         dec_ref = 0
     elif args.dec_field == "chosen_cat":
-        dec_ref = 1.5
         balance_field = "cat_proj"
+        dec_ref = 1.5
 
     if args.balance_complement:
         use_balance_field = balance_field

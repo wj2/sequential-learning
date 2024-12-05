@@ -1,11 +1,11 @@
 import os
 import scipy.io as sio
-import skimage.io as skio
 import re
 import numpy as np
 import pandas as pd
 import scipy.stats as sts
 import sklearn.model_selection as skms
+from PIL import Image
 
 import general.utility as u
 import general.data_io as gio
@@ -15,7 +15,9 @@ CONFIG_PATH = "sequential_learning/config.conf"
 cf = u.ConfigParserColor()
 cf.read(CONFIG_PATH)
 
-BASEFOLDER = cf.get("DEFAULT", "BASEFOLDER", fallback="../data/sequential_learning/")
+ROOTFOLDER = cf.get("DEFAULT", "ROOTFOLDER", fallback="../data/sequential_learning/")
+BASEFOLDER = os.path.join(ROOTFOLDER, "data")
+STIMFOLDER = os.path.join(ROOTFOLDER, "stimuli")
 
 
 ft1 = (
@@ -27,11 +29,17 @@ ft2 = (
     "(?P<post>\\.postA[0-9]+)?\\.FIRA\\.LMAN_"
     "cat\\.(?P<region>[A-Z0-9+]+)\\.mat"
 )
-file_templates = (ft1, ft2)
+ft3 = (
+    "A(?P<date>[0-9a-z]+)\\.fix(?P<shape>A[0-9]+(\\-t)?)"
+    "(?P<post>\\.postA[0-9]+)?\\.(?P<time>(before|after)\\.)?FIRA\\.fixation"
+    "\\.(?P<region>[A-Z0-9+]+)\\.mat"
+)
+file_templates = (ft1, ft2, ft3)
 
 default_type_dict = {
     "time": float,
     "value": float,
+    "task_ver": object,
 }
 
 
@@ -81,6 +89,9 @@ shape_sequence_nopost = (
 )
 
 
+shape_sequence_unique = shape_sequence_nopost[:-3]
+
+
 def get_boundary_angles(shapes=None, data_folder=BASEFOLDER, **kwargs):
     if shapes is None:
         shapes = shape_sequence
@@ -112,11 +123,70 @@ def load_shape_list(
             os.path.join(data_folder, shape),
             max_files=max_files,
             sort_by=sort_by,
+            **kwargs,
         )
         if exclude_invalid:
             data = filter_valid(data)
         out_data[shape] = data
     return out_data
+
+
+def _get_ith_feature(feats, i):
+    feats_all = []
+    orders_all = []
+    for feat in feats:
+        feats_sess = []
+        for x in feat:
+            if not np.all(np.isnan(x)) and len(x) > i:
+                feats_sess.append(x[i])
+            else:
+                feats_sess.append(np.array((np.nan, np.nan)))
+        orders_all.append(np.ones(len(feats_sess)) * i)
+        feats_sess = np.array(feats_sess).reshape((-1, 2))
+        feats_all.append(feats_sess)
+    return feats_all, orders_all
+
+
+def get_fixation_stim_responses(
+    data,
+    tbeg=50,
+    twid=300,
+    stim_on_templ="stim_on_{}",
+    max_stim=8,
+    feature_field="stim_feature_MAIN",
+    filter_nan=True,
+    **kwargs,
+):
+    stim_on_fields = list(stim_on_templ.format(i) for i in range(1, max_stim + 1))
+    pops_all, feats_all, orders_all = [], [], []
+    for i, sof in enumerate(stim_on_fields):
+        mask = data[sof].rs_isnan().rs_not()
+        data_i = data.mask(mask)
+        pops, xs = data_i.get_neural_activity(
+            twid, tbeg, tbeg, twid, time_zero_field=sof, **kwargs
+        )
+        feats, orders = _get_ith_feature(data_i[feature_field], i)
+        n_sessions = len(pops)
+        pops_all.append(pops)
+        feats_all.append(feats)
+        orders_all.append(orders)
+    pop_groups_all = []
+    feat_groups_all = []
+    order_groups_all = []
+    for i in range(n_sessions):
+        pops_group = np.concatenate(list(p[i] for p in pops_all), axis=0)
+        feats_group = np.concatenate(list(f[i] for f in feats_all), axis=0)        
+        orders_group = np.concatenate(list(f[i] for f in orders_all), axis=0)
+        if filter_nan:
+            mask = ~np.any(np.isnan(feats_group), axis=1)
+            pops_group = pops_group[mask]
+            feats_group = feats_group[mask]
+            orders_group = orders_group[mask]
+        pop_groups_all.append(pops_group)
+        feat_groups_all.append(feats_group)
+        order_groups_all.append(orders_group)
+    
+    return pop_groups_all, feat_groups_all, order_groups_all
 
 
 def sample_uniform_mask(
@@ -175,6 +245,14 @@ def get_shape_folders(use_folder=BASEFOLDER, pattern="A[0-9]+[a-z]?(postA[0-9]+)
     return out
 
 
+def load_all_images(image_seq=shape_sequence_unique, basefolder=STIMFOLDER, **kwargs):
+    imgs = {}
+    for img in image_seq:
+        path = os.path.join(basefolder, img)
+        imgs[img] = load_stim_images(path, **kwargs)
+    return imgs
+
+
 def load_stim_images(stim_folder, template=stim_temp):
     fls = os.listdir(stim_folder)
     lv1s = []
@@ -186,14 +264,60 @@ def load_stim_images(stim_folder, template=stim_temp):
             lv1 = int(m.group("lv1"))
             lv2 = int(m.group("lv2"))
             fp = os.path.join(stim_folder, fl)
-            img = skio.imread(fp)
+            img = np.array(Image.open(fp).convert("RGB")) / 255
+            img = np.moveaxis(img, -1, 0)
             lv1s.append(lv1)
             lv2s.append(lv2)
             imgs.append(img)
     return np.array(lv1s), np.array(lv2s), np.stack(imgs, axis=0)
 
 
-def load_file(fname, type_dict=default_type_dict):
+feat_pattern = "(?P<shape>A[0-9])/(?P<f1>[\\-0-9]+)_(?P<f2>[\\-0-9]+)_.*"
+
+
+def _extract_feats(s, pattern=feat_pattern):
+    m = re.match(pattern, s[0])
+    if m is None:
+        shape = np.nan
+        f1 = np.nan
+        f2 = np.nan
+        print(s)
+    else:
+        shape = m.group("shape")
+        f1 = float(m.group("f1"))
+        f2 = float(m.group("f2"))
+    return shape, (f1, f2)
+
+
+def _extract_feat_list(img_strs, **kwargs):
+    shapes = []
+    feats = []
+    for s in img_strs:
+        shape_i, feat_i = _extract_feats(s, **kwargs)
+        shapes.append(shape_i)
+        feats.append(feat_i)
+    return np.array(shapes), np.stack(feats, axis=0)
+
+
+def process_fixation(full_dict):
+    imgs = full_dict["imagename"]
+    num_stim = full_dict["shown_stim_num"]
+    feats = np.zeros(len(imgs), dtype=object)
+    shapes = np.zeros_like(feats)
+    for i, trl_img in enumerate(imgs):
+        img_strs = trl_img[: int(num_stim[i])]
+
+        if len(img_strs) > 0:
+            shapes[i], feats[i] = _extract_feat_list(img_strs)
+        else:
+            shapes[i] = np.nan
+            feats[i] = np.nan
+    full_dict["shapes"] = shapes
+    full_dict["stim_feature_MAIN"] = feats
+    return full_dict
+
+
+def load_file(fname, type_dict=default_type_dict, fixation=True):
     data = sio.loadmat(fname)
     fira = data["FIRA"]
     keys, types = fira[0, 0]["events"][0, 0]
@@ -203,7 +327,10 @@ def load_file(fname, type_dict=default_type_dict):
         if u.check_list(k):
             k = k[0]
         vals_i = vals[:, i]
-        use_type = type_dict.get(types[i][0], object)
+        if (t := type_dict.get(k)) is not None:
+            use_type = t
+        else:
+            use_type = type_dict.get(types[i][0], object)
         if np.product(vals_i[0].shape) != 1 or k == "fp_wd_type":
             use_type = object
 
@@ -215,8 +342,10 @@ def load_file(fname, type_dict=default_type_dict):
             else:
                 try:
                     vals_use[j] = vuj
-                except ValueError:
+                except ValueError as e:
                     print(k, use_type, vuj)
+                    print(types[i][0])
+                    print(e)
                     vals_use[j] = np.nan
         full_dict[k] = vals_use
     spike_times_all = fira[0, 2][:, 0]
@@ -226,25 +355,12 @@ def load_file(fname, type_dict=default_type_dict):
     for i, spk_trl in enumerate(spike_times_all):
         spks[i] = list(np.squeeze(neur_trl) for neur_trl in spk_trl[:, 0])
     full_dict["spikeTimes"] = list(s for s in spks)
+    if fixation:
+        full_dict = process_fixation(full_dict)
     return full_dict
 
 
-def _get_projs(
-    data,
-    stim_feat_field="stim_feature_MAIN",
-    cat_bound_field="cat_def_MAIN",
-):
-    feats = np.zeros((len(data), 2))
-    feats[:] = np.nan
-    for i, f_i in enumerate(data[stim_feat_field].to_numpy()):
-        if u.check_list(f_i) and len(f_i) == 2:
-            feats[i] = f_i
-    feats = feats / 1000
-    cat_boundary_angles, counts = np.unique(
-        data[cat_bound_field].to_numpy(), return_counts=True
-    )
-    cba = cat_boundary_angles[np.argmax(counts)]
-
+def project_on_angle(feats, cba):
     cat_vec = u.make_unit_vector(
         np.array(
             [
@@ -266,21 +382,113 @@ def _get_projs(
     return cat, anticat
 
 
+def get_common_angle(angs):
+    cat_boundary_angles, counts = np.unique(angs, return_counts=True)
+    cba = cat_boundary_angles[np.argmax(counts)]
+    return cba
+
+
+def _get_projs(
+    data,
+    stim_feat_field="stim_feature_MAIN",
+    cat_bound_field="cat_def_MAIN",
+):
+    feats = np.zeros((len(data), 2))
+    feats[:] = np.nan
+    for i, f_i in enumerate(data[stim_feat_field].to_numpy()):
+        if u.check_list(f_i) and len(f_i) == 2:
+            feats[i] = f_i
+    feats = feats / 1000
+    cba = get_common_angle(
+        data[cat_bound_field].to_numpy(),
+    )
+
+    return project_on_angle(feats, cba)
+
+
 angle_corrections = {
     "A4": -30,
     "A5": 30,
 }
 
-def fully_sampled(fvs, bound=.7, eps=.1):
+
+def fully_sampled(fvs, bound=0.7, eps=0.1):
     mask = []
     for fv_i in fvs:
         mins = np.min(fv_i, axis=0)
         c1 = np.all(mins < (bound + bound * eps))
         maxs = np.max(fv_i, axis=0)
         c2 = np.all(maxs > (bound - bound * eps))
-        c3 = np.any(np.sqrt(np.sum(fv_i ** 2, axis=1)) < eps * bound)
+        c3 = np.any(np.sqrt(np.sum(fv_i**2, axis=1)) < eps * bound)
         mask.append(c1 and c2 and c3)
     return np.array(mask)
+
+
+def process_categorization(data_fl_pd, shape, center_pt):
+    cats = data_fl_pd["stim_sample_MAIN"]
+    opp_cats = np.zeros_like(cats)
+    opp_cats[cats == 1] = 2
+    opp_cats[cats == 2] = 1
+    corr_targ = data_fl_pd["targ_cor"]
+    cho_targ = data_fl_pd["targ_cho"]
+    if shape in angle_corrections.keys():
+        data_fl_pd["cat_def_MAIN"] = (
+            data_fl_pd["cat_def_MAIN"] + angle_corrections[shape]
+        )
+    if "stim_aperture" in data_fl_pd.columns:
+        pos = np.stack(list(tuple(x) for x in data_fl_pd["stim_aperture"]), axis=0)
+        uv = u.make_unit_vector(pos[:, :2] - center_pt)
+        ang = np.arctan2(uv[:, 1], uv[:, 0]) - np.arctan2(0, 1)
+        rot = np.array([[np.cos(ang), -np.sin(ang)], [np.sin(ang), np.cos(ang)]])
+        feats = np.stack(
+            list(tuple(x) for x in data_fl_pd["stim_feature_MAIN"]), axis=0
+        )
+        cd_vec = u.radian_to_sincos(np.radians(data_fl_pd["cat_def_MAIN"]))
+        new_vec = np.array(
+            list(tuple(cd_i @ rot[..., i]) for i, cd_i in enumerate(cd_vec))
+        )
+        new_cat_def = np.degrees(u.sincos_to_radian(new_vec[:, 0], new_vec[:, 1]))
+
+        new_feats = list(tuple(fi @ rot[..., i]) for i, fi in enumerate(feats))
+        data_fl_pd["screen_angle"] = ang
+        data_fl_pd["stim_feature_screen"] = new_feats
+        data_fl_pd["feature_vector"] = list(tuple(x) for x in uv)
+        data_fl_pd["cat_def_screen"] = new_cat_def
+    else:
+        fv = np.zeros((len(cats), 2))
+        cd = np.zeros(len(cats))
+        fv[:] = np.nan
+        data_fl_pd["feature_vector"] = list(tuple(x) for x in fv)
+        data_fl_pd["stim_feature_screen"] = list(tuple(x) for x in fv)
+        data_fl_pd["cat_def_screen"] = cd
+        data_fl_pd["screen_angle"] = cd
+
+    choices = np.zeros_like(cats)
+    choices[:] = np.nan
+    mask_corr = corr_targ == cho_targ
+    data_fl_pd["correct"] = mask_corr
+    choices[mask_corr] = cats[mask_corr]
+    choices[~mask_corr] = opp_cats[~mask_corr]
+    data_fl_pd["chosen_cat"] = choices
+    cat_proj, anticat_proj = _get_projs(data_fl_pd)
+    u_cats = np.unique(cats[cat_proj > 0])
+    try:
+        assert len(u_cats) == 1
+    except AssertionError:
+        print(shape)
+        print(np.unique(cats[cat_proj > 0], return_counts=True))
+        cp1 = cat_proj[cats == 1]
+        print(cp1[cp1 > 0])
+    if cats[cat_proj > 0].iloc[0] == 1:
+        cat_proj = -cat_proj
+        data_fl_pd["cat_def_MAIN"] = u.normalize_periodic_range(
+            data_fl_pd["cat_def_MAIN"] + 180,
+            radians=False,
+        )
+        print("{} flipped category projection".format(shape))
+    data_fl_pd["cat_proj"] = cat_proj
+    data_fl_pd["anticat_proj"] = anticat_proj
+    return data_fl_pd
 
 
 def load_kiani_data_folder(
@@ -290,6 +498,7 @@ def load_kiani_data_folder(
     max_files=np.inf,
     angle_corrections=angle_corrections,
     center_pt=(-2, -2),
+    fixation=False,
 ):
     datas = []
     n_neurs = []
@@ -299,7 +508,12 @@ def load_kiani_data_folder(
     shapes = []
 
     files_loaded = 0
-    file_gen = u.load_folder_regex_generator(folder, *templates, load_func=load_file)
+    file_gen = u.load_folder_regex_generator(
+        folder,
+        *templates,
+        load_func=load_file,
+        fixation=fixation,
+    )
     center_pt = np.expand_dims(center_pt, 0)
     for fl, fl_info, data_fl in file_gen:
         dates.append(fl_info["date"])
@@ -308,7 +522,10 @@ def load_kiani_data_folder(
         if shape_add is None:
             shape_add = ""
         shapes.append(shape + str(shape_add))
-        days.append(int(fl_info["day"]))
+        day_fl = fl_info.get("day", None)
+        if day_fl is not None:
+            day_fl = int(day_fl)
+        days.append(day_fl)
         monkeys.append(monkey_name)
 
         n_neur_fl = data_fl["spikeTimes"][0].shape[0]
@@ -321,67 +538,9 @@ def load_kiani_data_folder(
             data_fl["neur_regions"] = (((fl_info["region"],) * n_neur_fl),) * len(
                 data_fl["spikeTimes"]
             )
-        cats = data_fl["stim_sample_MAIN"]
-        opp_cats = np.zeros_like(cats)
-        opp_cats[cats == 1] = 2
-        opp_cats[cats == 2] = 1
-        corr_targ = data_fl["targ_cor"]
-        cho_targ = data_fl["targ_cho"]
-        if shape in angle_corrections.keys():
-            data_fl["cat_def_MAIN"] = data_fl["cat_def_MAIN"] + angle_corrections[shape]
         data_fl_pd = pd.DataFrame.from_dict(data_fl)
-        if "stim_aperture" in data_fl.keys():
-            pos = np.stack(list(tuple(x) for x in data_fl["stim_aperture"]), axis=0)
-            uv = u.make_unit_vector(pos[:, :2] - center_pt)
-            ang = np.arctan2(uv[:, 1], uv[:, 0]) - np.arctan2(0, 1)
-            rot = np.array([[np.cos(ang), -np.sin(ang)], [np.sin(ang), np.cos(ang)]])
-            feats = np.stack(
-                list(tuple(x) for x in data_fl["stim_feature_MAIN"]), axis=0
-            )
-            cd_vec = u.radian_to_sincos(np.radians(data_fl["cat_def_MAIN"]))
-            new_vec = np.array(
-                list(tuple(cd_i @ rot[..., i]) for i, cd_i in enumerate(cd_vec))
-            )
-            new_cat_def = np.degrees(u.sincos_to_radian(new_vec[:, 0], new_vec[:, 1]))
-
-            new_feats = list(tuple(fi @ rot[..., i]) for i, fi in enumerate(feats))
-            data_fl_pd["screen_angle"] = ang
-            data_fl_pd["stim_feature_screen"] = new_feats
-            data_fl_pd["feature_vector"] = list(tuple(x) for x in uv)
-            data_fl_pd["cat_def_screen"] = new_cat_def
-        else:
-            fv = np.zeros((len(cats), 2))
-            cd = np.zeros(len(cats))
-            fv[:] = np.nan
-            data_fl_pd["feature_vector"] = list(tuple(x) for x in fv)
-            data_fl_pd["stim_feature_screen"] = list(tuple(x) for x in fv)
-            data_fl_pd["cat_def_screen"] = cd
-            data_fl_pd["screen_angle"] = cd
-            
-        choices = np.zeros_like(cats)
-        choices[:] = np.nan
-        mask_corr = corr_targ == cho_targ
-        data_fl_pd["correct"] = mask_corr
-        choices[mask_corr] = cats[mask_corr]
-        choices[~mask_corr] = opp_cats[~mask_corr]
-        data_fl_pd["chosen_cat"] = choices
-        cat_proj, anticat_proj = _get_projs(data_fl_pd)
-        u_cats = np.unique(cats[cat_proj > 0])
-        try:
-            assert len(u_cats) == 1
-        except AssertionError:
-            print(shape)
-            print(np.unique(cats[cat_proj > 0], return_counts=True))
-            cp1 = cat_proj[cats == 1]
-            print(cp1[cp1 > 0])
-        if cats[cat_proj > 0][0] == 1:
-            cat_proj = -cat_proj
-            data_fl_pd["cat_def_MAIN"] = u.normalize_periodic_range(
-                data_fl_pd["cat_def_MAIN"] + 180, radians=False,
-            )
-            print("{} flipped category projection".format(shape))
-        data_fl_pd["cat_proj"] = cat_proj
-        data_fl_pd["anticat_proj"] = anticat_proj
+        if not fixation:
+            data_fl_pd = process_categorization(data_fl_pd, shape, center_pt)
 
         datas.append(data_fl_pd)
         n_neurs.append(n_neur_fl)
@@ -478,9 +637,10 @@ def get_strict_prototype_masks(
 
 
 def single_prototype_mask(
-        *args, **kwargs,
+    data,
+    **kwargs,
 ):
-    return get_strict_prototype_masks(*args, single_mask=True, **kwargs)
+    return get_strict_prototype_masks(data, single_mask=True, **kwargs)[0]
 
 
 def get_prototype_masks(

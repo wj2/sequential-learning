@@ -3,13 +3,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as sts
 
-import general.data_io as gio
 import general.paper_utilities as pu
 import general.utility as u
 import general.plotting as gpl
 import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
 import sequential_learning.visualization as slv
+import sequential_learning.ann_representation as slar
 
 config_path = "sequential_learning/sequential_learning/figures.conf"
 colors = (
@@ -166,6 +166,206 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 1])
 
 
+class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
+    def __init__(
+        self,
+        shape=None,
+        exper_data=None,
+        fig_key="boundary_extrapolation_figure",
+        region="IT",
+        fig_folder="",
+        uniform_resample=False,
+        min_trials=100,
+        dec_field="cat_proj",
+        gen_field="anticat_proj",
+        balance_field=None,
+        gen_func=None,
+        fwid=2,
+        dec_ref=0,
+        **kwargs,
+    ):
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.region = (region,)
+        self.fig_folder = fig_folder
+        self.gen_func = gen_func
+        self.dec_ref = dec_ref
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+            self.shape = exper_data["shape"].iloc[0]
+        elif shape is not None:
+            self.shape = shape
+        else:
+            raise IOError("either data or shape must be provided")
+
+        self.params = params
+        self.data = kwargs.pop("data", {})
+        print(self.data.keys())
+        n_sessions = self._get_n_sessions()
+        fsize = (fwid * 2, fwid * n_sessions)
+        super().__init__(fsize, params, data=self.get_data(), colors=colors, **kwargs)
+
+    def _get_n_sessions(self):
+        data = self.load_shape_data(shape=self.shape)
+        n_sessions = len(np.unique(data["day"]))
+        return n_sessions
+
+    def make_gss(self):
+        gss = {}
+        n_sessions = self._get_n_sessions()
+        proj_grid = pu.make_mxn_gridspec(
+            self.gs,
+            n_sessions,
+            2,
+            0,
+            100,
+            0,
+            100,
+            1,
+            1,
+        )
+        proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
+        gss["panel_pattern"] = proj_axs
+
+        self.gss = gss
+
+    def _analysis(self, recompute=False):
+        data = self.load_shape_data(shape=self.shape)
+        fkey = ("main_analysis", self.shape)
+        if self.data.get(fkey) is None or recompute:
+            img_reps = slar.get_representations(shapes=(self.shape,))
+            dd = {self.shape: data}
+            lvs, _, reps = slar.project_lvs(img_reps, dd)[self.shape]
+            lv_proj, gen_proj = slar.generalization_pattern(
+                lvs, reps, pca=self.params.getfloat("pca")
+            )
+            _, day_ind = np.unique(data["day"], return_index=True)
+            projs = data[["chosen_cat", "cat_proj", "anticat_proj"]]
+            projs = list(proj for i, proj in enumerate(projs) if i in day_ind)
+            self.data[fkey] = projs, lv_proj, gen_proj
+        return self.data[fkey]
+
+    def panel_pattern(self, **kwargs):
+        key = "panel_pattern"
+        axs = self.gss[key]
+
+        projs, lv_proj, gen_proj = self._analysis(**kwargs)
+
+        feat_dims = (1, 2)
+        choice_dim = 0
+        for i, proj_i in enumerate(projs):
+            feat_i = proj_i.to_numpy()
+            slv.plot_gen_map_average(
+                feat_i[:, feat_dims],
+                feat_i[:, choice_dim],
+                ax=axs[i, 0],
+                vmin=1,
+                vmax=2,
+            )
+            slv.plot_gen_map_average(
+                lv_proj, gen_proj, ax=axs[i, 1], vmin=0, vmax=1
+            )
+
+
+class DecoderErrorPatternFigure(SequenceLearningFigure):
+    def __init__(
+        self,
+        shape=None,
+        exper_data=None,
+        fig_key="error_pattern_figure",
+        region="IT",
+        fig_folder="",
+        uniform_resample=False,
+        min_trials=100,
+        dec_field="cat_proj",
+        balance_field="chosen_cat",
+        fwid=2,
+        dec_ref=0,
+        **kwargs,
+    ):
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.region = (region,)
+        self.fig_folder = fig_folder
+        self.uniform_resample = uniform_resample
+        self.min_trials = min_trials
+        self.dec_field = dec_field
+        self.dec_ref = dec_ref
+        self.balance_field = balance_field
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+            self.shape = exper_data["shape"].iloc[0]
+        elif shape is not None:
+            self.shape = shape
+        else:
+            raise IOError("either data or shape must be provided")
+
+        self.params = params
+        self.data = kwargs.pop("data", {})
+        n_sessions = self._get_n_sessions()
+        fsize = (fwid * 3, fwid * n_sessions)
+        super().__init__(fsize, params, data=self.get_data(), colors=colors, **kwargs)
+
+    def _get_n_sessions(self):
+        data = self.load_shape_data(shape=self.shape)
+        n_sessions = len(np.unique(data["day"]))
+        return n_sessions
+
+    def make_gss(self):
+        gss = {}
+        n_sessions = self._get_n_sessions()
+        proj_grid = pu.make_mxn_gridspec(
+            self.gs,
+            n_sessions,
+            3,
+            0,
+            100,
+            0,
+            100,
+            1,
+            1,
+        )
+        proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
+        gss["panel_pattern"] = proj_axs
+
+        self.gss = gss
+
+    def _analysis(self, recompute=False):
+        data = self.load_shape_data(shape=self.shape)
+        fkey = ("main_analysis", self.shape)
+        if self.data.get(fkey) is None or recompute:
+            t_start = self.params.getfloat("t_start")
+            t_end = self.params.getfloat("t_end")
+            binsize = self.params.getfloat("binsize")
+            binstep = self.params.getfloat("binstep")
+            out = sla.error_projection_pattern(
+                data,
+                self.dec_field,
+                regions=self.region,
+                t_start=t_start,
+                t_end=t_end,
+                binsize=binsize,
+                binstep=binstep,
+                balance_field=self.balance_field,
+                uniform_resample=self.uniform_resample,
+                min_trials=self.min_trials,
+                dec_ref=self.dec_ref,
+            )
+            self.data[fkey] = out
+        return self.data[fkey]
+    
+
+
 class BoundaryExtrapolationFigure(SequenceLearningFigure):
     def __init__(
         self,
@@ -181,7 +381,6 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
         balance_field=None,
         gen_func=None,
         fwid=2,
-        data=None,
         dec_ref=0,
         **kwargs,
     ):
