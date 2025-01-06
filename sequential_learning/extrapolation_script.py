@@ -98,7 +98,7 @@ def main():
     fig.save(fname + ".pdf", use_bf=args.output_folder)
     exper_data = fig.get_data()["exper_data"]
 
-    slf.DecoderErrorPatternFigure(
+    fig = slf.DecoderErrorPatternFigure(
         shape=shape,
         dec_field=args.dec_field,
         balance_field=use_balance_field,
