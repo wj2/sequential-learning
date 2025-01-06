@@ -502,8 +502,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         self.min_trials = min_trials
         self.dec_field = dec_field
         self.gen_field = gen_field
-        self.gen_func_active = gen_func
-        self.gen_func_fix = gen_func
+        self.gen_func = gen_func
         self.dec_ref = dec_ref
         self.balance_field = balance_field
         if exper_data is not None:
@@ -559,7 +558,8 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
             active_out = sla.generalize_projection_pattern(
                 data,
                 self.dec_field,
-                gen_func=self.gen_func_active,
+                gen_func=self.gen_func,
+                gen_field=self.gen_field,
                 regions=self.region,
                 t_start=t_start,
                 t_end=t_end,
@@ -575,7 +575,8 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
             fix_out = sla.fixation_generalization_pattern(
                 fix_data,
                 bhv_days=data["day"],
-                gen_func=self.gen_func_fix,
+                gen_func=self.gen_func,
+                gen_field=self.gen_field,
                 regions=self.region,
                 dec_ref=self.dec_ref,
                 min_trials=self.min_trials,

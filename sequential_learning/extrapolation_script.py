@@ -85,6 +85,7 @@ def main():
         fig = slf.FixationBoundaryExtrapolationFigure(
             shape=shape,
             dec_field=args.dec_field,
+            gen_field=args.gen_field,
             gen_func=gen_func,
             balance_field=use_balance_field,
             dec_ref=dec_ref,

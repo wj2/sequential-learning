@@ -641,7 +641,7 @@ def _combine_days_fixation(
 def fixation_generalization_pattern(
     data,
     dec_field="cat_proj",
-    gen_field=None,
+    gen_field="anticat_proj",
     gen_func=slaux.proto_box_mask,
     t_start=50,
     binsize=300,
