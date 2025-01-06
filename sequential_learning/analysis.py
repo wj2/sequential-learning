@@ -681,8 +681,8 @@ def fixation_generalization_pattern(
     full_outs = []
     bhv_feats_keep = []
     if gen_field is not None:
-        g1_masks = feats[gen_field] > gen_ref
-        g2_masks = feats[gen_field] <= gen_ref
+        g1_masks = u.ResultSequence(feats[gen_field]) > gen_ref
+        g2_masks = u.ResultSequence(feats[gen_field]) <= gen_ref
     elif gen_func is not None:
         g1_masks = gen_func(feats)
         g2_masks = g1_masks.rs_not()

@@ -213,7 +213,6 @@ class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
 
         self.params = params
         self.data = kwargs.pop("data", {})
-        print(self.data.keys())
         n_sessions = self._get_n_sessions()
         fsize = (fwid * 2, fwid * n_sessions)
         super().__init__(fsize, params, data=self.get_data(), colors=colors, **kwargs)
