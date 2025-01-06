@@ -684,8 +684,8 @@ def fixation_generalization_pattern(
         g1_masks = gen_func(feats)
         g2_masks = g1_masks.rs_not()
     elif gen_field is not None:
-        g1_masks = list(x > gen_ref for x in feats[gen_field])
-        g2_masks = list(x <= gen_ref for x in feats[gen_field])
+        g1_masks = list(np.squeeze(x > gen_ref) for x in feats[gen_field])
+        g2_masks = list(np.squeeze(x <= gen_ref) for x in feats[gen_field])
     else:
         raise IOError("one of gen_field or gen_func must be set, both are None")
     for i, pop in enumerate(pops):
