@@ -107,7 +107,7 @@ def main():
         dec_field=args.dec_field,
         balance_field=use_balance_field,
         dec_ref=dec_ref,
-        exper_data=exper_data,
+        exper_data=exper_data[0],
     )
     fig.panel_pattern()
 
