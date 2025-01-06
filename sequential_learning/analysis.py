@@ -669,6 +669,11 @@ def fixation_generalization_pattern(
         pops, feats, orders, days, bhv_days, bhv_feats = _combine_days_fixation(
             pops, feats, orders, days, bhv_days=bhv_days, bhv_feats=bhv_feats
         )
+    u_shapes = np.unique(np.concatenate(feats["shapes"]))
+    if len(u_shapes) > 1:
+        print(u_shapes)
+        raise IOError("more than one shape in data")
+        
     test_feats_all = []
     gen_feats_all = []
     gen_proj_all = []
