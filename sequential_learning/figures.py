@@ -550,7 +550,6 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         fkey = ("main_analysis", self.shape)
         if self.data.get(fkey) is None or recompute:
             t_start = self.params.getfloat("t_start")
-            t_end = self.params.getfloat("t_end")
             binsize = self.params.getfloat("binsize")
             binstep = self.params.getfloat("binstep")
             combine_days_fix = self.params.getboolean("combine_days_fixation")
@@ -561,7 +560,6 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
                 gen_field=self.gen_field,
                 regions=self.region,
                 t_start=t_start,
-                t_end=t_end,
                 binsize=binsize,
                 binstep=binstep,
                 balance_field=self.balance_field,
@@ -698,7 +696,6 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
         fkey = ("main_analysis", self.shape)
         if self.data.get(fkey) is None or recompute:
             t_start = self.params.getfloat("t_start")
-            t_end = self.params.getfloat("t_end")
             binsize = self.params.getfloat("binsize")
             binstep = self.params.getfloat("binstep")
             out = sla.generalize_projection_pattern(
@@ -708,7 +705,6 @@ class BoundaryExtrapolationFigure(SequenceLearningFigure):
                 gen_func=self.gen_func,
                 regions=self.region,
                 t_start=t_start,
-                t_end=t_end,
                 binsize=binsize,
                 binstep=binstep,
                 balance_field=self.balance_field,
