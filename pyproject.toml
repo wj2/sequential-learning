@@ -27,10 +27,10 @@ classifiers = [
 dependencies = [
   "numpy~=1.26.4",
   "scipy~=1.14.1",
-  "pandas~=2.2.2",
-  "matplotlib~=3.9.2",
-  "scikit-learn~=1.5.1",
-  "scikit-image~=0.22.0",
+  "pandas>=2.2.2",
+  "matplotlib>=3.9.2",
+  "scikit-learn>=1.5.1",
+  "scikit-image>=0.22.0",
 ]
 
 [project.scripts]

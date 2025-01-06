@@ -10,7 +10,7 @@ def create_parser():
         description="perform decoding analyses on Kiani data"
     )
     parser.add_argument("--data_folder", default=slaux.BASEFOLDER)
-    out_template = "extrap_{dec_field}-x-{gen_field}_{shape}_{jobid}"
+    out_template = "{kind}_{dec_field}-x-{gen_field}_{shape}_{jobid}"
     parser.add_argument(
         "-o",
         "--output_template",
@@ -28,10 +28,11 @@ def create_parser():
     parser.add_argument("--sequence_ind", default=0, type=int)
     parser.add_argument("--no_post", default=False, action="store_true")
     parser.add_argument("--uniform_resample", default=False, action="store_true")
-    parser.add_argument("--dec_field", default="chosen_cat", type=str)
+    parser.add_argument("--dec_field", default="cat_proj", type=str)
     parser.add_argument("--gen_field", default="anticat_proj", type=str)
     parser.add_argument("--use_prototypes", default=False, action="store_true")
     parser.add_argument("--balance_complement", default=False, action="store_true")
+    parser.add_argument("--no_fixation", default=False, action="store_true")
     return parser
 
 
@@ -65,19 +66,48 @@ def main():
         use_balance_field = None
 
     if args.use_prototypes:
-        gen_func = slaux.single_prototype_mask
+        gen_func = slaux.proto_box_mask
         gen_str = "prototype"
     else:
         gen_func = None
         gen_str = args.gen_field
 
-    fig = slf.BoundaryExtrapolationFigure(
+    if args.no_fixation:
+        fig = slf.BoundaryExtrapolationFigure(
+            shape=shape,
+            dec_field=args.dec_field,
+            gen_field=args.gen_field,
+            gen_func=gen_func,
+            balance_field=use_balance_field,
+            dec_ref=dec_ref,
+        )
+    else:
+        fig = slf.FixationBoundaryExtrapolationFigure(
+            shape=shape,
+            dec_field=args.dec_field,
+            gen_func=gen_func,
+            balance_field=use_balance_field,
+            dec_ref=dec_ref,
+        )
+
+    fig.panel_pattern()
+
+    fname = args.output_template.format(
         shape=shape,
         dec_field=args.dec_field,
-        gen_field=args.gen_field,
-        gen_func=gen_func,
+        gen_field=gen_str,
+        jobid=args.jobid,
+        kind="extrap",
+    )
+    fig.save(fname + ".pdf", use_bf=args.output_folder)
+    exper_data = fig.get_data()["exper_data"]
+
+    slf.DecoderErrorPatternFigure(
+        shape=shape,
+        dec_field=args.dec_field,
         balance_field=use_balance_field,
         dec_ref=dec_ref,
+        exper_data=exper_data,
     )
     fig.panel_pattern()
 
@@ -86,5 +116,6 @@ def main():
         dec_field=args.dec_field,
         gen_field=gen_str,
         jobid=args.jobid,
+        kind="full",
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)

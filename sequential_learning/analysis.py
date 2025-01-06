@@ -4,6 +4,7 @@ import scipy.stats as sts
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
 import sklearn.linear_model as sklm
+import sklearn.metrics.pairwise as skmp
 
 import general.utility as u
 import general.neural_analysis as na
@@ -605,6 +606,241 @@ def combined_choice_decoder(
     return out_dict
 
 
+def _combine_days_fixation(
+    pops,
+    feats,
+    orders,
+    days,
+    bhv_days=None,
+    bhv_feats=None,
+    zscore=True,
+):
+    keep_pops, keep_orders = [], []
+    keep_feats = {f: [] for f in feats.keys()}
+    keep_bhv_feats = []
+    for i, pop in enumerate(pops):
+        if pop.shape[1] > 0 and (bhv_days is None or days[i] in bhv_days):
+            if zscore:
+                pop = na.zscore_tc_shape(pop)
+            keep_pops.append(pop)
+            list(keep_feats[f].append(feats[f][i]) for f in feats.keys())
+            keep_orders.append(orders[i])
+            if bhv_feats is not None:
+                ind = np.where(bhv_days == days[i])[0][0]
+                keep_bhv_feats.append(bhv_feats[ind])
+    pops = [np.concatenate(keep_pops, axis=0)]
+    feats = {f: [np.concatenate(keep_feats[f], axis=0)] for f in feats.keys()}
+    orders = [np.concatenate(keep_orders, axis=0)]
+    if bhv_feats is not None:
+        bhv_feats = [np.concatenate(keep_bhv_feats, axis=0)]
+        bhv_days = np.array([0])
+    days = np.array([0])
+    return pops, feats, orders, days, bhv_days, bhv_feats
+
+
+def fixation_generalization_pattern(
+    data,
+    dec_field="cat_proj",
+    gen_field=None,
+    gen_func=slaux.proto_box_mask,
+    t_start=50,
+    binsize=300,
+    regions=("IT",),
+    model=skm.LinearSVC,
+    folds_n=20,
+    dec_ref=0,
+    gen_ref=0,
+    min_trials=100,
+    feat_fields=("cat_proj", "anticat_proj"),
+    day_key="day",
+    bhv_feats=None,
+    bhv_days=None,
+    combine_days=False,
+    **kwargs,
+):
+    days = data[day_key]
+    pops, feats, orders = slaux.get_fixation_stim_responses(
+        data,
+        tbeg=t_start,
+        twid=binsize,
+        regions=regions,
+    )
+    if combine_days:
+        pops, feats, orders, days, bhv_days, bhv_feats = _combine_days_fixation(
+            pops, feats, orders, days, bhv_days=bhv_days, bhv_feats=bhv_feats
+        )
+    test_feats_all = []
+    gen_feats_all = []
+    gen_proj_all = []
+    test_proj_all = []
+    full_outs = []
+    bhv_feats_keep = []
+    if gen_field is not None:
+        g1_masks = feats[gen_field] > gen_ref
+        g2_masks = feats[gen_field] <= gen_ref
+    elif gen_func is not None:
+        g1_masks = gen_func(feats)
+        g2_masks = g1_masks.rs_not()
+    else:
+        raise IOError("one of gen_field or gen_func must be set, both are None")
+    for i, pop in enumerate(pops):
+        day_i = days[i]
+        dec_feat = feats[dec_field][i] > dec_ref
+        g1_mask = g1_masks[i]
+        g2_mask = g2_masks[i]
+        pop1 = pop[g1_mask]
+        pop2 = pop[g2_mask]
+        lab1 = dec_feat[g1_mask]
+        lab2 = dec_feat[g2_mask]
+        feats_con = np.concatenate(list(feats[f][i] for f in feat_fields), axis=1)
+        feats1 = feats_con[g1_mask]
+        feats2 = feats_con[g2_mask]
+        if (
+            pop1.shape[1] > 0
+            and pop1.shape[0] > min_trials
+            and pop2.shape[0] > min_trials
+            and day_i in bhv_days
+        ):
+            if bhv_feats is not None:
+                ind = np.where(bhv_days == day_i)[0][0]
+                bhv_feats_keep.append(bhv_feats[ind])
+            out1 = na.fold_skl_shape(
+                pop1,
+                lab1,
+                folds_n,
+                c_gen=pop2,
+                l_gen=lab2,
+                model=model,
+                return_projection=True,
+                **kwargs,
+            )
+
+            out2 = na.fold_skl_shape(
+                pop2,
+                lab2,
+                folds_n,
+                c_gen=pop1,
+                l_gen=lab1,
+                model=model,
+                return_projection=True,
+                **kwargs,
+            )
+            test_feats1 = feats1[out1["test_inds"]]
+            test_feats2 = feats2[out2["test_inds"]]
+            test_feats_all.append(np.concatenate((test_feats1, test_feats2), axis=2))
+            gen_feats_all.append(np.concatenate((feats2, feats1)))
+            gen_proj_all.append(
+                np.concatenate((out1["projection_gen"], out2["projection_gen"]), axis=1)
+            )
+            test_proj_all.append(
+                np.concatenate(
+                    (out1["projection"], out2["projection"]),
+                    axis=2,
+                )
+            )
+            full_outs.append((out1, out2))
+
+    out_dict = {
+        "feats_gen": gen_feats_all,
+        "proj_gen": gen_proj_all,
+        "feats_test": test_feats_all,
+        "proj_test": test_proj_all,
+        "full_out": full_outs,
+        "bhv_feats": bhv_feats_keep,
+    }
+    return out_dict
+
+
+def similarity_pattern(
+    pop,
+    feats,
+    targ,
+    choice=None,
+    balance_choice=False,
+    n_folds=10,
+    test_frac=0.1,
+    proto_func=slaux.box_mask_array,
+):
+    proto_mask = proto_func(feats)
+    non_proto_mask = np.logical_not(proto_mask)
+    cv = na.BalancedCV(n_folds, test_size=test_frac)
+    pop_proto = pop[proto_mask]
+    pop_non = pop[non_proto_mask]
+    targ_proto = targ[proto_mask]
+    feats_proto = feats[proto_mask]
+    feats_non = feats[non_proto_mask]
+    u_targs = np.unique(targ)
+    mu_proto = np.zeros((n_folds, len(u_targs), pop.shape[1]))
+    if choice is not None and balance_choice:
+        targ_proto_split = np.stack((targ_proto, choice[proto_mask]), axis=1)
+    else:
+        targ_proto_split = targ_proto
+    te_sims_all = []
+    te_feats_all = []
+    non_sims = np.zeros((n_folds, len(u_targs), len(feats_non)))
+    for i, (tr_inds, te_inds) in enumerate(cv.split(feats_proto, targ_proto_split)):
+        pop_tr = pop_proto[tr_inds]
+        targ_tr = targ_proto[tr_inds]
+        for j, ut in enumerate(u_targs):
+            mu_proto[i, j] = np.mean(pop_tr[ut == targ_tr])
+        # te_sim = skmp.euclidean_distances(mu_proto[i], pop_proto[te_inds])
+        te_sim = mu_proto[i] @ pop_proto[te_inds].T
+        te_feats = feats_proto[te_inds]
+        te_sims_all.append(te_sim)
+        te_feats_all.append(te_feats)
+        non_sims[i] = mu_proto[i] @ pop_non.T
+        # non_sims[i] = skmp.euclidean_distances(mu_proto[i], pop_non)
+    te_sims = np.stack(te_sims_all, axis=0)
+    te_feats = np.stack(te_feats_all, axis=0)
+    return te_sims, te_feats, non_sims, feats_non
+
+
+def get_presentation_pops(
+    data,
+    *feats,
+    t_start=0,
+    t_end=0,
+    binsize=500,
+    binstep=500,
+    regions=("IT",),
+    min_trials=100,
+    skl_axes=False,
+    time_zero_field="stim_on",
+    session_keys=(
+        "day",
+        "date",
+    ),
+):
+    pops, xs = data.get_neural_activity(
+        binsize,
+        t_start,
+        t_end,
+        binstep,
+        time_zero_field=time_zero_field,
+        regions=regions,
+        skl_axes=skl_axes,
+    )
+    session_info = data[list(session_keys)]
+    feats = data[list(feats)]
+    if skl_axes:
+        n_neur = 0
+        n_trls = 2
+    else:
+        n_neur = 1
+        n_trls = 0
+    out_pops = []
+    out_feats = []
+    out_session = []
+    for i, pop in enumerate(pops):
+        feats_i = feats[i]
+        if pop.shape[n_neur] > 0 and pop.shape[n_trls] > min_trials:
+            assert pop.shape[-1] == 1
+            out_pops.append(pop[..., 0])
+            out_feats.append(feats_i)
+            out_session.append(session_info.iloc[i])
+    return out_pops, out_feats, out_session
+
+
 def generalize_projection_pattern(
     data,
     dec_field,
@@ -676,7 +912,7 @@ def generalize_projection_pattern(
         feats2 = feats_i[mask2]
 
         balance_i = balance_vars[i]
-        if balance_i is not None: 
+        if balance_i is not None:
             balance1_i = np.stack((balance_i[mask1], lab1), axis=1)
             balance2_i = np.stack((balance_i[mask2], lab2), axis=1)
         else:
@@ -699,7 +935,7 @@ def generalize_projection_pattern(
                 balance_rel_fields=balance1_i is not None,
                 **kwargs,
             )
-            
+
             out2 = na.fold_skl_flat(
                 pop2,
                 lab2,
@@ -721,7 +957,8 @@ def generalize_projection_pattern(
             )
             test_proj_all.append(
                 np.concatenate(
-                    (out1["projection"], out2["projection"]), axis=2,
+                    (out1["projection"], out2["projection"]),
+                    axis=2,
                 )
             )
             full_outs.append((out1, out2))
@@ -735,7 +972,6 @@ def generalize_projection_pattern(
         "full_out": full_outs,
     }
     return out_dict
-
 
 
 def error_projection_pattern(
@@ -791,14 +1027,11 @@ def error_projection_pattern(
         lab = labels
 
         balance_i = balance_vars[i]
-        if balance_i is not None: 
+        if balance_i is not None:
             balance_full_i = np.stack((balance_i, lab), axis=1)
         else:
             balance_full_i = None
-        if (
-            pop.shape[0] > 0
-            and pop.shape[1] > min_trials
-        ):
+        if pop.shape[0] > 0 and pop.shape[1] > min_trials:
             out = na.fold_skl_flat(
                 pop,
                 lab,
@@ -809,12 +1042,10 @@ def error_projection_pattern(
                 balance_rel_fields=balance_full_i is not None,
                 **kwargs,
             )
-            
+
             test_feats = feats_i[out["test_inds"]]
             test_feats_all.append(test_feats)
-            test_proj_all.append(
-                out["projection"]
-            )
+            test_proj_all.append(out["projection"])
             full_outs.append(out)
 
     out_dict = {

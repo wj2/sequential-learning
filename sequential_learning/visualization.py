@@ -247,8 +247,61 @@ def average_similar_stimuli(
     return new_reps
 
 
+def plot_fixation_generalization(
+    feats_bhv,
+    projs,
+    feats,
+    feat_dims_bhv=(1, 2),
+    choice_dim_bhv=0,
+    feat_dims=(0, 1),
+    axs=None,
+    fwid=2,
+    average_folds=True,
+    smooth_radius=0.2,
+):
+    if axs is None:
+        f, axs = plt.subplots(
+            len(projs), 2, figsize=(fwid * 2, fwid * len(projs)), squeeze=False
+        )
+
+    for i, proj_i in enumerate(projs):
+        feats_bhv_i = np.reshape(feats_bhv[i], (-1, feats_bhv[i].shape[-1]))
+        feats_i = np.reshape(feats[i], (-1, feats[i].shape[-1]))
+        rel_feats_bhv = feats_bhv_i[..., feat_dims_bhv]
+        rel_feats = feats_i[..., feat_dims]
+        rel_choice = feats_bhv_i[..., choice_dim_bhv]
+        if average_folds:
+            ax = (0, -1)
+        else:
+            ax = 1
+        proj_i = np.mean(proj_i, axis=ax).flatten()
+        plot_gen_map_average(
+            rel_feats_bhv,
+            rel_choice,
+            ax=axs[i, 0],
+            vmin=1,
+            vmax=2,
+            smooth_radius=smooth_radius,
+        )
+        plot_gen_map_average(
+            rel_feats,
+            proj_i > 0,
+            ax=axs[i, 1],
+            vmin=0,
+            vmax=1,
+            smooth_radius=smooth_radius,
+        )
+
+
 def plot_full_generalization(
-    projs, feats, feat_dims=(1, 2), choice_dim=0, axs=None, fwid=2, average_folds=False
+    projs,
+    feats,
+    feat_dims=(1, 2),
+    choice_dim=0,
+    axs=None,
+    fwid=2,
+    average_folds=False,
+    smooth_radius=0.2,
 ):
     if axs is None:
         f, axs = plt.subplots(len(projs), 2, figsize=(fwid * 2, fwid * len(projs)))
@@ -268,9 +321,15 @@ def plot_full_generalization(
             ax=axs[i, 0],
             vmin=1,
             vmax=2,
+            smooth_radius=smooth_radius,
         )
         plot_gen_map_average(
-            rel_feats, proj_i > 0, ax=axs[i, 1], vmin=0, vmax=1
+            rel_feats,
+            proj_i > 0,
+            ax=axs[i, 1],
+            vmin=0,
+            vmax=1,
+            smooth_radius=smooth_radius,
         )
 
 
@@ -344,23 +403,81 @@ def plot_gen_map(feats, proj, ax=None, cmap="bwr", model=skm.SVC, n_pts=50):
 
 @gpl.ax_adder()
 def plot_gen_map_average(
-    feats, proj, ax=None, cmap="bwr", model=skm.SVC, n_pts=50, vmin=None, vmax=None
+    feats,
+    proj,
+    ax=None,
+    cmap="bwr",
+    model=skm.SVC,
+    n_pts=50,
+    vmin=None,
+    vmax=None,
+    smooth_radius=0.2,
 ):
     bound = np.max(np.abs(feats))
     pts = np.linspace(-bound, bound, n_pts)
 
-    preds = make_average_map(pts, pts, feats, proj)
+    preds = make_average_map(pts, pts, feats, proj, radius=smooth_radius)
     v_bound = np.max(np.abs(preds))
     if vmin is None:
         vmin = -v_bound
     if vmax is None:
         vmax = v_bound
     gpl.pcolormesh(pts, pts, preds, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax)
+    ax.scatter(*feats.T, c=proj, s=0.1, vmin=vmin, vmax=vmax, cmap=cmap)
     ax.set_aspect("equal")
     gpl.add_hlines(0, ax)
     gpl.add_vlines(0, ax, color="k")
     gpl.clean_plot(ax, 1)
     gpl.clean_plot_bottom(ax)
+
+
+def plot_shape_gen_maps(
+    pops,
+    feats,
+    axs=None,
+    fwid=2,
+    n_folds=100,
+    balance_choice=True,
+    feat_inds=(0, 1),
+    dec_ind=0,
+    dec_ref=0,
+    choice_ind=-1,
+):
+    if axs is None:
+        f, axs = plt.subplots(len(pops), 2, figsize=(fwid * 2, fwid * len(pops)))
+    for sess_ind, pop_i in enumerate(pops):
+        pop_i = pops[sess_ind]
+        feats_i = feats[sess_ind].to_numpy()
+
+        pop_i_zs = skp.StandardScaler().fit_transform(pop_i)
+
+        te_sims, te_feats, non_sims, non_feats = sla.similarity_pattern(
+            pop_i_zs,
+            feats_i,
+            feats_i[:, dec_ind] > dec_ref,
+            choice=feats_i[:, choice_ind],
+            n_folds=n_folds,
+            balance_choice=balance_choice,
+        )
+        sim_diff = np.diff(np.mean(non_sims, axis=0), axis=0)[0]
+        if non_sims.shape[-1] > 0:
+            plot_gen_map_average(
+                non_feats[:, feat_inds],
+                non_feats[:, choice_ind],
+                vmin=1,
+                vmax=2,
+                ax=axs[sess_ind, 0],
+            )
+            plot_gen_map_average(
+                non_feats[:, feat_inds],
+                sim_diff,
+                vmin=-1,
+                vmax=1,
+                ax=axs[sess_ind, 1],
+            )
+
+        # can we see an off-boundary effect on choice?
+        print(te_sims.shape, non_sims.shape)
 
 
 def project_features_common(

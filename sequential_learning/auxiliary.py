@@ -17,6 +17,7 @@ cf.read(CONFIG_PATH)
 
 ROOTFOLDER = cf.get("DEFAULT", "ROOTFOLDER", fallback="../data/sequential_learning/")
 BASEFOLDER = os.path.join(ROOTFOLDER, "data")
+FIXATIONFOLDER = os.path.join(ROOTFOLDER, "fixation")
 STIMFOLDER = os.path.join(ROOTFOLDER, "stimuli")
 
 
@@ -104,19 +105,22 @@ def get_boundary_angles(shapes=None, data_folder=BASEFOLDER, **kwargs):
     return angle_dict
 
 
-def get_num_sessions():
-    pass
+def merge_task_info_with_passive(passive, task):
+    task[""]
 
 
 def load_shape_list(
     shapes,
     data_folder=BASEFOLDER,
+    fixation_data_folder=FIXATIONFOLDER,
     sort_by="day",
     max_files=np.inf,
     exclude_invalid=True,
+    with_passive=False,
     **kwargs,
 ):
     out_data = {}
+    passive_data = {}
     for shape in shapes:
         data = gio.Dataset.from_readfunc(
             load_kiani_data_folder,
@@ -128,21 +132,46 @@ def load_shape_list(
         if exclude_invalid:
             data = filter_valid(data)
         out_data[shape] = data
-    return out_data
+        if with_passive:
+            angs = np.concatenate(data["cat_def_MAIN"])
+            extra_fixation_info = {
+                "cat_def_MAIN": get_common_angle(angs),
+            }
+            data_passive = gio.Dataset.from_readfunc(
+                load_kiani_data_folder,
+                os.path.join(fixation_data_folder, shape),
+                max_files=max_files,
+                sort_by=sort_by,
+                fixation=True,
+                extra_fixation_info=extra_fixation_info,
+            )
+            task_dates = parse_dates(data["date"])
+            task_days = data["day"]
+            fix_dates = parse_dates(data_passive["date"])
+            fix_days = match_dates(fix_dates, task_dates, task_days)
+            data_passive.data["day"] = fix_days
+            data_passive = data_passive.resort_sessions("day")
+            print(data_passive["day"])
+            passive_data[shape] = data_passive
+    if with_passive:
+        out = (out_data, passive_data)
+    else:
+        out = out_data
+    return out
 
 
-def _get_ith_feature(feats, i):
+def _get_ith_feature(feats, i, shape=2):
     feats_all = []
     orders_all = []
     for feat in feats:
         feats_sess = []
         for x in feat:
             if not np.all(np.isnan(x)) and len(x) > i:
-                feats_sess.append(x[i])
+                feats_sess.append(np.array(x[i]).reshape((shape,)))
             else:
-                feats_sess.append(np.array((np.nan, np.nan)))
+                feats_sess.append(np.array((np.nan,) * shape))
         orders_all.append(np.ones(len(feats_sess)) * i)
-        feats_sess = np.array(feats_sess).reshape((-1, 2))
+        feats_sess = np.array(feats_sess).reshape((-1, shape))
         feats_all.append(feats_sess)
     return feats_all, orders_all
 
@@ -153,40 +182,57 @@ def get_fixation_stim_responses(
     twid=300,
     stim_on_templ="stim_on_{}",
     max_stim=8,
-    feature_field="stim_feature_MAIN",
+    feature_fields=("stim_feature_MAIN", "cat_proj", "anticat_proj"),
+    feature_shapes=(2, 1, 1),
     filter_nan=True,
     **kwargs,
 ):
     stim_on_fields = list(stim_on_templ.format(i) for i in range(1, max_stim + 1))
-    pops_all, feats_all, orders_all = [], [], []
+    pops_all, orders_all = [], []
+    feats_out = {}
     for i, sof in enumerate(stim_on_fields):
         mask = data[sof].rs_isnan().rs_not()
         data_i = data.mask(mask)
         pops, xs = data_i.get_neural_activity(
             twid, tbeg, tbeg, twid, time_zero_field=sof, **kwargs
         )
-        feats, orders = _get_ith_feature(data_i[feature_field], i)
+        for j, ff in enumerate(feature_fields):
+            feats_ff, orders = _get_ith_feature(data_i[ff], i, shape=feature_shapes[j])
+            feats_out_ff = feats_out.get(ff, [])
+            feats_out_ff.append(feats_ff)
+            feats_out[ff] = feats_out_ff
         n_sessions = len(pops)
         pops_all.append(pops)
-        feats_all.append(feats)
         orders_all.append(orders)
     pop_groups_all = []
-    feat_groups_all = []
+    feats_combined_all = {}
     order_groups_all = []
     for i in range(n_sessions):
-        pops_group = np.concatenate(list(p[i] for p in pops_all), axis=0)
-        feats_group = np.concatenate(list(f[i] for f in feats_all), axis=0)        
+        pops_group = np.concatenate(
+            list(p[i] for p in pops_all if p[i].shape[0] > 0), axis=0
+        )
+        feats_combined = {}
+        for ff in feature_fields:
+            feats_all = feats_out[ff]
+            feats_group = np.concatenate(list(f[i] for f in feats_all), axis=0)
+            feats_combined[ff] = feats_group
         orders_group = np.concatenate(list(f[i] for f in orders_all), axis=0)
         if filter_nan:
-            mask = ~np.any(np.isnan(feats_group), axis=1)
+            mask = ~np.any(np.isnan(feats_combined[feature_fields[0]]), axis=1)
             pops_group = pops_group[mask]
+            feats_combined = {
+                ff: feats_group[mask] for ff, feats_group in feats_combined.items()
+            }
             feats_group = feats_group[mask]
             orders_group = orders_group[mask]
         pop_groups_all.append(pops_group)
-        feat_groups_all.append(feats_group)
+        for ff in feature_fields:
+            x = feats_combined_all.get(ff, [])
+            x.append(feats_combined[ff])
+            feats_combined_all[ff] = x
         order_groups_all.append(orders_group)
-    
-    return pop_groups_all, feat_groups_all, order_groups_all
+
+    return pop_groups_all, feats_combined_all, order_groups_all
 
 
 def sample_uniform_mask(
@@ -281,7 +327,6 @@ def _extract_feats(s, pattern=feat_pattern):
         shape = np.nan
         f1 = np.nan
         f2 = np.nan
-        print(s)
     else:
         shape = m.group("shape")
         f1 = float(m.group("f1"))
@@ -491,6 +536,28 @@ def process_categorization(data_fl_pd, shape, center_pt):
     return data_fl_pd
 
 
+def _get_projs_fixation(data, cat_def, feat_key="stim_feature_MAIN"):
+    feats = data[feat_key].to_numpy()
+    cat_proj = np.zeros(len(feats), dtype=object)
+    anticat_proj = np.zeros_like(cat_proj)
+    for i, feat_i in enumerate(feats):
+        if np.all(np.isnan(feat_i)):
+            cat_proj[i] = np.nan
+            anticat_proj[i] = np.nan
+        else:
+            feat_i = feat_i / 1000
+            cat_proj[i], anticat_proj[i] = project_on_angle(feat_i, cat_def)
+    return cat_proj, anticat_proj
+
+
+def merge_extra_fixation_info(data, info):
+    if (cat_def := info.get("cat_def_MAIN")) is not None:
+        cat_proj, anticat_proj = _get_projs_fixation(data, cat_def)
+        data["cat_proj"] = cat_proj
+        data["anticat_proj"] = anticat_proj
+    return data
+
+
 def load_kiani_data_folder(
     folder,
     templates=file_templates,
@@ -499,6 +566,7 @@ def load_kiani_data_folder(
     angle_corrections=angle_corrections,
     center_pt=(-2, -2),
     fixation=False,
+    extra_fixation_info=None,
 ):
     datas = []
     n_neurs = []
@@ -541,6 +609,8 @@ def load_kiani_data_folder(
         data_fl_pd = pd.DataFrame.from_dict(data_fl)
         if not fixation:
             data_fl_pd = process_categorization(data_fl_pd, shape, center_pt)
+        if fixation and extra_fixation_info is not None:
+            data_fl_pd = merge_extra_fixation_info(data_fl_pd, extra_fixation_info)
 
         datas.append(data_fl_pd)
         n_neurs.append(n_neur_fl)
@@ -600,6 +670,22 @@ def parse_dates(dates):
     return out
 
 
+def match_dates(d1, d2, c2):
+    out = []
+    for d1_i in d1:
+        mask = d1_i == d2
+        if np.any(mask):
+            out.append(c2[np.where(mask)[0][0]])
+        else:
+            if np.all(d1_i < d2):
+                out.append(0)
+            elif np.all(d1_i > d2):
+                out.append(500)
+            else:
+                out.append(None)
+    return out
+
+
 def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN"):
     masks = []
     for data in datas:
@@ -608,6 +694,64 @@ def get_binary_feature_masks(*datas, feat_ind=0, feat_field="stim_feature_MAIN")
 
         masks.append((gio.ResultSequence(mask1), gio.ResultSequence(mask2)))
     return masks
+
+
+def proto_box_mask(fields, c1="cat_proj", c2="anticat_proj"):
+    return strict_prototype_mask_cat_acat(fields[c1], fields[c2])
+
+
+def strict_prototype_mask_cat_acat(
+    cat,
+    acat,
+):
+    cat = gio.ResultSequence(pd.Series(np.squeeze(x)) for x in cat)
+    acat = gio.ResultSequence(pd.Series(np.squeeze(x)) for x in acat)
+    return _box_mask(cat, acat, single_mask=True)
+
+
+BOX_MIN = 0.42
+BOX_MAX = 0.71
+BOX_AC = 0.1415
+def box_mask_array(
+        arr,
+        min_cat_bound=BOX_MIN,
+        max_cat_bound=BOX_MAX,
+        ac_bound=BOX_AC,
+        single_mask=True,
+        cat_ind=0,
+        acat_ind=1,
+):
+    cat, acat = arr[:, cat_ind], arr[:, acat_ind]
+    ac_con = np.logical_and(acat > -ac_bound , acat < ac_bound)
+    m1 = np.logical_and(cat > min_cat_bound , cat < max_cat_bound)
+    m1 = np.logical_and(m1, ac_con)
+    m2 = np.logical_and(cat < -min_cat_bound, cat > -max_cat_bound)
+    m2 = np.logical_and(m2, ac_con)
+    if single_mask:
+        ret_m = np.logical_or(m1, m2)
+    else:
+        ret_m = (m1, m2)
+    return ret_m
+
+
+def _box_mask(
+    cat,
+    acat,
+    min_cat_bound=BOX_MIN,
+    max_cat_bound=BOX_MAX,
+    ac_bound=BOX_AC,
+    single_mask=False,
+):
+    ac_con = (acat > -ac_bound).rs_and(acat < ac_bound)
+    m1 = (cat > min_cat_bound).rs_and(cat < max_cat_bound)
+    m1 = m1.rs_and(ac_con)
+    m2 = (cat > -max_cat_bound).rs_and(cat < -min_cat_bound)
+    m2 = m2.rs_and(ac_con)
+    if single_mask:
+        ret_m = m1.rs_or(m2)
+    else:
+        ret_m = (m1, m2)
+    return ret_m
 
 
 def get_strict_prototype_masks(
@@ -623,15 +767,7 @@ def get_strict_prototype_masks(
     for data in datas:
         cat = data[cat_proj_field]
         acat = data[anticat_proj_field]
-        ac_con = (acat > -ac_bound).rs_and(acat < ac_bound)
-        m1 = (cat > min_cat_bound).rs_and(cat < max_cat_bound)
-        m1 = m1.rs_and(ac_con)
-        m2 = (cat > -max_cat_bound).rs_and(cat < -min_cat_bound)
-        m2 = m2.rs_and(ac_con)
-        if single_mask:
-            ret_m = m1.rs_or(m2)
-        else:
-            ret_m = (m1, m2)
+        ret_m = _box_mask(cat, acat)
         masks.append(ret_m)
     return masks
 
