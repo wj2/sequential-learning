@@ -72,25 +72,20 @@ def main():
         gen_func = None
         gen_str = args.gen_field
 
+    
     if args.no_fixation:
-        fig = slf.BoundaryExtrapolationFigure(
-            shape=shape,
-            dec_field=args.dec_field,
-            gen_field=args.gen_field,
-            gen_func=gen_func,
-            balance_field=use_balance_field,
-            dec_ref=dec_ref,
-        )
+        fig_class = slf.BoundaryExtrapolationFigure
     else:
-        fig = slf.FixationBoundaryExtrapolationFigure(
-            shape=shape,
-            dec_field=args.dec_field,
-            gen_field=args.gen_field,
-            gen_func=gen_func,
-            balance_field=use_balance_field,
-            dec_ref=dec_ref,
-        )
-
+        fig_class = slf.FixationBoundaryExtrapolationFigure
+        
+    fig = fig_class(
+        shape=shape,
+        dec_field=args.dec_field,
+        gen_field=args.gen_field,
+        gen_func=gen_func,
+        balance_field=use_balance_field,
+        dec_ref=dec_ref,
+    )
     fig.panel_pattern()
 
     fname = args.output_template.format(
@@ -120,3 +115,27 @@ def main():
         kind="full",
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)
+
+    try:
+        fig = slf.ANNBoundaryExtrapolationFigure(
+            shape=shape,
+            dec_field=args.dec_field,
+            gen_field=args.gen_field,
+            gen_func=gen_func,
+            balance_field=use_balance_field,
+            dec_ref=dec_ref,
+            exper_data=exper_data[0]
+        )
+        fig.panel_pattern()
+
+        fname = args.output_template.format(
+            shape=shape,
+            dec_field=args.dec_field,
+            gen_field=gen_str,
+            jobid=args.jobid,
+            kind="ann",
+        )
+        fig.save(fname + ".pdf", use_bf=args.output_folder)
+    except Exception as e:
+        print(e)
+        print("ANN analysis failed")
