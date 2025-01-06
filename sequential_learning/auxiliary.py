@@ -166,7 +166,7 @@ def _get_ith_feature(feats, i, shape=2):
     for feat in feats:
         feats_sess = []
         for x in feat:
-            if not np.all(np.isnan(x)) and len(x) > i:
+            if u.check_list(x) and len(x) > i:
                 feats_sess.append(np.array(x[i]).reshape((shape,)))
             else:
                 feats_sess.append(np.array((np.nan,) * shape))
@@ -182,8 +182,9 @@ def get_fixation_stim_responses(
     twid=300,
     stim_on_templ="stim_on_{}",
     max_stim=8,
-    feature_fields=("stim_feature_MAIN", "cat_proj", "anticat_proj"),
-    feature_shapes=(2, 1, 1),
+    feature_fields=("stim_feature_MAIN", "cat_proj", "anticat_proj", "shapes"),
+    feature_shapes=(2, 1, 1, 1),
+    shown_stim_field="shown_stim_num",
     filter_nan=True,
     **kwargs,
 ):
@@ -192,6 +193,7 @@ def get_fixation_stim_responses(
     feats_out = {}
     for i, sof in enumerate(stim_on_fields):
         mask = data[sof].rs_isnan().rs_not()
+        mask = mask.rs_and(data[shown_stim_field] >= i)
         data_i = data.mask(mask)
         pops, xs = data_i.get_neural_activity(
             twid, tbeg, tbeg, twid, time_zero_field=sof, **kwargs
