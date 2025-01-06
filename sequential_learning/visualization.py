@@ -412,6 +412,7 @@ def plot_gen_map_average(
     vmin=None,
     vmax=None,
     smooth_radius=0.2,
+    plot_scatter=False,
 ):
     bound = np.max(np.abs(feats))
     pts = np.linspace(-bound, bound, n_pts)
@@ -423,7 +424,8 @@ def plot_gen_map_average(
     if vmax is None:
         vmax = v_bound
     gpl.pcolormesh(pts, pts, preds, cmap=cmap, vmin=vmin, vmax=vmax, ax=ax)
-    ax.scatter(*feats.T, c=proj, s=0.1, vmin=vmin, vmax=vmax, cmap=cmap)
+    if plot_scatter:
+        ax.scatter(*feats.T, c=proj, s=0.1, vmin=vmin, vmax=vmax, cmap=cmap)
     ax.set_aspect("equal")
     gpl.add_hlines(0, ax)
     gpl.add_vlines(0, ax, color="k")
