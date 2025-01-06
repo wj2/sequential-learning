@@ -642,7 +642,7 @@ def fixation_generalization_pattern(
     data,
     dec_field="cat_proj",
     gen_field="anticat_proj",
-    gen_func=slaux.proto_box_mask,
+    gen_func=None,
     t_start=50,
     binsize=300,
     regions=("IT",),
@@ -680,12 +680,12 @@ def fixation_generalization_pattern(
     test_proj_all = []
     full_outs = []
     bhv_feats_keep = []
-    if gen_field is not None:
-        g1_masks = list(x > gen_ref for x in feats[gen_field])
-        g2_masks = list(x <= gen_ref for x in feats[gen_field])
-    elif gen_func is not None:
+    if gen_func is not None:
         g1_masks = gen_func(feats)
         g2_masks = g1_masks.rs_not()
+    elif gen_field is not None:
+        g1_masks = list(x > gen_ref for x in feats[gen_field])
+        g2_masks = list(x <= gen_ref for x in feats[gen_field])
     else:
         raise IOError("one of gen_field or gen_func must be set, both are None")
     for i, pop in enumerate(pops):
