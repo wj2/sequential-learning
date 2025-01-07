@@ -464,7 +464,7 @@ def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=
         if len(res[res_key]) > 2:
             print("mag")
             mag = res[res_key][2]
-            print(mag)
+            print(np.mean(mag))
             gpl.plot_trace_werr(sessions, mag, ax=axs[i], conf95=True)
         axs[i].set_title(shape)
         axs[i].set_ylabel("correlation")

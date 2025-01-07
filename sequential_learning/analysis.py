@@ -1061,7 +1061,7 @@ def quantify_task_error_pattern(
     null_map = null_map.flatten()
     vec = choice_map - null_map
     vec_norm = np.nansum(vec ** 2)
-    mag = np.nansum(proj_map * vec) / vec_norm
+    mag = np.nansum((proj_map - null_map) * vec) / vec_norm
     res = pd.DataFrame(
         np.stack((proj_map.flatten(), choice_map.flatten()), axis=1)
     ).corr().to_numpy()[0, 1]
