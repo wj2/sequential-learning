@@ -642,6 +642,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
                 dec_ref=self.dec_ref,
             )
             bhv_feats = data[["chosen_cat", "cat_proj", "anticat_proj"]]
+            bhv_feats = list(bff.to_numpy() for bff in bhv_feats)
 
             fix_out = sla.fixation_generalization_pattern(
                 fix_data,
@@ -704,7 +705,6 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         projs_fix = out_fix["proj_gen"]
         feats_fix = out_fix["feats_gen"]
         bhv_feats_fix = out_fix["bhv_feats"]
-        bhv_feats_fix = list(bff.to_numpy() for bff in bhv_feats_fix)
 
         quant_fix = sla.quantify_error_pattern_sessions(
             projs_fix, feats_fix, bhv_feats=bhv_feats_fix, average_folds=True,

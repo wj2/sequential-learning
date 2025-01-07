@@ -458,6 +458,7 @@ def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=
         sessions = np.arange(acc.shape[1])
         gpl.plot_trace_werr(sessions, acc, ax=axs[i], conf95=True)
         gpl.plot_trace_werr(sessions, null, ax=axs[i], conf95=True)
+        axs[i].set_title(shape)
 
 
 def project_features_common(
