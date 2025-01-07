@@ -1056,13 +1056,19 @@ def quantify_task_error_pattern(
     )
     null_map = np.ones_like(proj_map)
     null_map[:, pts < 0] = -1
+    proj_map = proj_map.flatten()
+    choice_map = choice_map.flatten()
+    null_map = null_map.flatten()
+    vec = choice_map - null_map
+    vec_norm = np.sum(vec ** 2)
+    mag = proj_map @ vec / vec_norm
     res = pd.DataFrame(
         np.stack((proj_map.flatten(), choice_map.flatten()), axis=1)
     ).corr().to_numpy()[0, 1]
     null_res = pd.DataFrame(
         np.stack((proj_map.flatten(), null_map.flatten()), axis=1)
     ).corr().to_numpy()[0, 1]
-    return res, null_res
+    return res, null_res, mag
 
 
 def quantify_error_pattern_sessions(
@@ -1070,6 +1076,7 @@ def quantify_error_pattern_sessions(
 ):
     quant = np.zeros((n_boots, len(projs)))
     quant_null = np.zeros_like(quant)
+    mag = np.zeros_like(quant)
     rng = np.random.default_rng()
     for i, projs_i in enumerate(projs):
         for j in range(n_boots):
@@ -1086,9 +1093,8 @@ def quantify_error_pattern_sessions(
             res_ij = quantify_task_error_pattern(
                 projs_ij, feats_ij, bhv_feats=bhv_feats_ij, **kwargs
             )
-            print(res_ij)
-            quant[j, i], quant_null[j, i] = res_ij
-    return quant, quant_null
+            quant[j, i], quant_null[j, i], mag[j, i] = res_ij
+    return quant, quant_null, mag
 
 
 def error_projection_pattern(
