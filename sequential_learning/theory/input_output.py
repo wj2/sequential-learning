@@ -3,6 +3,7 @@ import numpy as np
 import disentangled.data_generation as ddg
 import general.tasks.classification as gtc
 import general.utility as u
+import general.neural_analysis as na
 
 
 class DiscreteMixedContext:
@@ -63,12 +64,56 @@ def make_task_set(n_tasks, rel_dims, con_dims, share_tasks=None, share_task_dims
         if share_task_dims:
             use_dims = rel_dims
         else:
-            use_dims = rel_dims[i:i+1]
+            use_dims = rel_dims[i : i + 1]
         task_sets.append(gtc.LinearTask.make_task_group(n_tasks, use_dims))
     for ind1, ind2 in share_tasks:
         task_sets[ind2] = task_sets[ind1]
     con_tasks = gtc.ContextualTask(*task_sets, c_inds=con_dims)
     return con_tasks
+
+
+class StaticRepSampler:
+    def __init__(
+        self,
+        xy_seq,
+        sigma=0.1,
+    ):
+        self.n_contexts = len(xy_seq)
+        self.xy_seq = xy_seq
+        self.rng = np.random.default_rng()
+        self.pipe = None
+
+    def make_x_preprocessor(self, **kwargs):
+        pipe = na.make_model_pipeline(**kwargs)
+        xs = np.concatenate(list(xy[0] for xy in self.xy_seq))
+        xs = np.reshape(xs, (xs.shape[0], -1))
+
+        pipe.fit(xs)
+        self.pipe = pipe
+
+    def sample_xy_pairs(self, n_samps=1000, contexts=None, add_noise=False, **kwargs):
+        if contexts is None:
+            contexts = range(self.n_contexts)
+        x_all = np.concatenate(list(self.xy_seq[i][0] for i in contexts), axis=0)
+        y_all = np.concatenate(list(self.xy_seq[i][1] for i in contexts), axis=0)
+        inds = self.rng.choice(x_all.shape[0], n_samps)
+        x_samples = x_all[inds]
+        y_samples = y_all[inds]
+        if len(y_samples.shape) == 1:
+            y_samples = np.expand_dims(y_samples, 1)
+        if len(x_samples.shape) > 2:
+            x_samples = np.reshape(x_samples, (x_samples.shape[0], -1))
+        if self.pipe is not None:
+            x_samples = self.pipe.transform(x_samples)
+        if add_noise:
+            x_samples = x_samples + self.sigma * self.rng.normal(
+                0, 1, size=x_samples.shape
+            )
+        return x_samples, y_samples
+
+    def generator(self, batch_size=100, max_samples=10**8, **kwargs):
+        for i in range(max_samples):
+            yield self.sample_xy_pairs(batch_size, **kwargs)
 
 
 class InputOutputSampler:

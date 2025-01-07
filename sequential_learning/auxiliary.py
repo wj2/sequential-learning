@@ -176,6 +176,20 @@ def _get_ith_feature(feats, i, shape=2):
     return feats_all, orders_all
 
 
+extrap_template = ("extrap_cat_proj-x-(prototype|anticat_proj)_"
+                   "(?P<shape>A[0-9])_{runind}\.pkl")
+
+def load_extrap_results(runind, folder=None, template=extrap_template):
+    if folder is None:
+        folder = "sequential_learning/extrap/"
+    template = template.format(runind=runind)
+    gen = u.load_folder_regex_generator(folder, template)
+    out_dict = {}
+    for path, info, res in gen:
+        out_dict[info["shape"]] = res
+    return out_dict
+
+
 def get_fixation_stim_responses(
     data,
     tbeg=50,

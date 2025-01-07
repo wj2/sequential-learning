@@ -5,6 +5,7 @@ import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
 import sklearn.linear_model as sklm
 import sklearn.metrics.pairwise as skmp
+import pandas as pd
 
 import general.utility as u
 import general.neural_analysis as na
@@ -1055,8 +1056,12 @@ def quantify_task_error_pattern(
     )
     null_map = np.ones_like(proj_map)
     null_map[:, pts < 0] = -1
-    res = sts.pearsonr(proj_map.flatten(), choice_map.flatten()).statistic
-    null_res = sts.pearsonr(proj_map.flatten(), null_map.flatten()).statistic
+    res = pd.DataFrame(
+        np.stack((proj_map.flatten(), choice_map.flatten()), axis=1)
+    ).corr().to_numpy()[0, 1]
+    null_res = pd.DataFrame(
+        np.stack((proj_map.flatten(), null_map.flatten()), axis=1)
+    ).corr().to_numpy()[0, 1]
     return res, null_res
 
 
@@ -1081,6 +1086,7 @@ def quantify_error_pattern_sessions(
             res_ij = quantify_task_error_pattern(
                 projs_ij, feats_ij, bhv_feats=bhv_feats_ij, **kwargs
             )
+            print(res_ij)
             quant[j, i], quant_null[j, i] = res_ij
     return quant, quant_null
 

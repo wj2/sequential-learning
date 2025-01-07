@@ -314,7 +314,6 @@ def plot_full_generalization(
         )
 
 
-
 @gpl.ax_adder()
 def plot_gen_scatter(
     feat_i,
@@ -440,6 +439,25 @@ def plot_shape_gen_maps(
 
         # can we see an off-boundary effect on choice?
         print(te_sims.shape, non_sims.shape)
+
+
+def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=2):
+    if shape_seq is None:
+        shape_seq = result_dict.keys()
+    if axs is None:
+        f, axs = plt.subplots(
+            len(shape_seq),
+            1,
+            figsize=(fwid * 2, fwid * len(shape_seq)),
+            sharex="all",
+            sharey="all",
+        )
+    for i, shape in enumerate(shape_seq):
+        res = result_dict[shape]
+        acc, null = res[res_key]
+        sessions = np.arange(acc.shape[1])
+        gpl.plot_trace_werr(sessions, acc, ax=axs[i], conf95=True)
+        gpl.plot_trace_werr(sessions, null, ax=axs[i], conf95=True)
 
 
 def project_features_common(
