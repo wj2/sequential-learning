@@ -214,7 +214,8 @@ class ANNContinualLearning(SequenceLearningFigure):
         axs = self.gss[key]
 
         if self.data.get(key) is None or retrain:
-            self.get
+            img_reps = slar.get_representations(shapes=self.shapes)
+            
 
 
 
@@ -703,6 +704,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         projs_fix = out_fix["proj_gen"]
         feats_fix = out_fix["feats_gen"]
         bhv_feats_fix = out_fix["bhv_feats"]
+        bhv_feats_fix = list(bff.to_numpy() for bff in bhv_feats_fix)
 
         quant_fix = sla.quantify_error_pattern_sessions(
             projs_fix, feats_fix, bhv_feats=bhv_feats_fix, average_folds=True,
