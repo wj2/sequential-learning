@@ -541,7 +541,7 @@ class DecoderErrorPatternFigure(SequenceLearningFigure):
         out_dict = self._analysis(**kwargs)
         projs = out_dict["proj_test"]
         feats = out_dict["feats_test"]
-        quant_out = sla.quantify_task_error_pattern_sessions(projs, feats)
+        quant_out = sla.quantify_error_pattern_sessions(projs, feats)
         fname = os.path.join(use_bf, file_)
         pickle.dump(quant_out, open(fname, "wb"))
 
