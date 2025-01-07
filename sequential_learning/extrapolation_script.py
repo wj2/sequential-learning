@@ -96,6 +96,8 @@ def main():
         kind="extrap",
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)
+    fig.save_quantification(fname + ".pkl", use_bf=args.output_folder)
+    
     exper_data = fig.get_data()["exper_data"]
 
     fig = slf.DecoderErrorPatternFigure(
@@ -115,6 +117,7 @@ def main():
         kind="full",
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)
+    fig.save_quantification(fname + ".pkl", use_bf=args.output_folder)
 
     try:
         fig = slf.ANNBoundaryExtrapolationFigure(
@@ -136,6 +139,7 @@ def main():
             kind="ann",
         )
         fig.save(fname + ".pdf", use_bf=args.output_folder)
+        fig.save_quantification(fname + ".pkl", use_bf=args.output_folder)
     except Exception as e:
         print(e)
         print("ANN analysis failed")

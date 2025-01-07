@@ -228,25 +228,6 @@ def plot_cross_projection(*dvs, ref_inds=None, axs=None, fwid=3, t_ind=0, **kwar
     return axs
 
 
-def _boxcar(ref_feat, feats, radius=0.2):
-    dists = np.sqrt(np.sum((np.expand_dims(ref_feat, 0) - feats) ** 2, axis=1))
-    weights = dists < radius
-    return weights / np.sum(weights)
-
-
-def average_similar_stimuli(
-    reps,
-    feats,
-    weight_func=_boxcar,
-    **kwargs,
-):
-    new_reps = np.zeros_like(reps)
-    for i, rep_i in enumerate(reps):
-        weights = weight_func(feats[i], feats, **kwargs)
-        new_reps[i] = np.sum(np.expand_dims(weights, 1) * reps, axis=0)
-    return new_reps
-
-
 def plot_fixation_generalization(
     feats_bhv,
     projs,
@@ -333,27 +314,6 @@ def plot_full_generalization(
         )
 
 
-def make_average_map(
-    x_vals,
-    y_vals,
-    stim,
-    weights,
-    weight_func=_boxcar,
-    radius=0.2,
-):
-    xs, ys = np.meshgrid(x_vals, y_vals)
-    xs_flat = xs.flatten()
-    ys_flat = ys.flatten()
-
-    pts = np.stack((xs_flat, ys_flat), axis=1)
-    map_vals = np.zeros(len(pts))
-    for i, pt in enumerate(pts):
-        pt_i = np.sum(weights * weight_func(pt, stim, radius=radius), axis=0)
-        map_vals[i] = pt_i
-
-    map_use = map_vals.reshape((len(x_vals), len(y_vals)))
-    return map_use
-
 
 @gpl.ax_adder()
 def plot_gen_scatter(
@@ -417,7 +377,7 @@ def plot_gen_map_average(
     bound = np.max(np.abs(feats))
     pts = np.linspace(-bound, bound, n_pts)
 
-    preds = make_average_map(pts, pts, feats, proj, radius=smooth_radius)
+    preds = sla.make_average_map(pts, pts, feats, proj, radius=smooth_radius)
     v_bound = np.max(np.abs(preds))
     if vmin is None:
         vmin = -v_bound
@@ -506,7 +466,7 @@ def project_features_common(
         pop_pt = pop_p[..., t_ind]
         proj = np.swapaxes(basis, -1, -2) @ pop_pt
         proj = np.mean(proj, axis=0).T
-        proj = average_similar_stimuli(proj, fvs_p, radius=radius)
+        proj = sla.average_similar_stimuli(proj, fvs_p, radius=radius)
         proj_all.append(proj)
     p = skd.PCA(3)
     p.fit_transform(np.concatenate(proj_all, axis=0))

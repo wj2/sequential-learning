@@ -2,6 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as sts
+import pickle
 
 import general.paper_utilities as pu
 import general.utility as u
@@ -174,6 +175,49 @@ class SequenceLearningFigure(pu.Figure):
                 gpl.add_hlines(chance, axs[j, 1])
 
 
+class ANNContinualLearning(SequenceLearningFigure):
+    def __init__(
+        self,
+        shapes=("A2", "A3", "A4"),
+        fig_key="continual_learning_figure",
+        fwid=2,
+        **kwargs,
+    ):
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.shapes = shapes
+        fsize = (fwid, fwid * len(shapes))
+        super().__init__(fsize, params, colors=colors, **kwargs)
+    
+    def make_gss(self):
+        gss = {}
+        proj_grid = pu.make_mxn_gridspec(
+            self.gs,
+            1,
+            len(self.shapes),
+            0,
+            100,
+            0,
+            100,
+            1,
+            1,
+        )
+        proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
+        gss["panel_learning"] = proj_axs
+
+        self.gss = gss
+
+    def panel_learning(self, retrain=False):
+        key = "panel_learning"
+        axs = self.gss[key]
+
+        if self.data.get(key) is None or retrain:
+            self.get
+
+
+
 class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
     def __init__(
         self,
@@ -275,6 +319,23 @@ class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
                 vmax=2,
             )
             slv.plot_gen_map_average(lv_proj, gen_proj, ax=axs[i, 1], vmin=0, vmax=1)
+
+    def save_quantification(self, file_=None, use_bf=None, **kwargs):
+        if file_ is None:
+            file_ = self.fig_key
+        if use_bf is None:
+            use_bf = self.bf
+
+        projs, lv_proj, gen_proj = self._analysis(**kwargs)
+        bhv_feats = list(proj.to_numpy() for proj in projs)
+        lv_projs = (lv_proj,) * len(bhv_feats)
+        gen_projs = (gen_proj,) * len(bhv_feats)
+        quant_out = sla.quantify_error_pattern_sessions(
+            lv_projs, gen_projs, bhv_feats=bhv_feats, average_folds=True,
+        )
+
+        fname = os.path.join(use_bf, file_)
+        pickle.dump(quant_out, open(fname, "wb"))
 
 
 class PassiveErrorPattern(SequenceLearningFigure):
@@ -470,6 +531,19 @@ class DecoderErrorPatternFigure(SequenceLearningFigure):
         feats = out_dict["feats_test"]
         slv.plot_full_generalization(projs, feats, axs=axs)
 
+    def save_quantification(self, file_=None, use_bf=None, **kwargs):
+        if file_ is None:
+            file_ = self.fig_key
+        if use_bf is None:
+            use_bf = self.bf
+
+        out_dict = self._analysis(**kwargs)
+        projs = out_dict["proj_test"]
+        feats = out_dict["feats_test"]
+        quant_out = sla.quantify_task_error_pattern_sessions(projs, feats)
+        fname = os.path.join(use_bf, file_)
+        pickle.dump(quant_out, open(fname, "wb"))
+
 
 class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
     def __init__(
@@ -615,6 +689,31 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
             average_folds=True,
             smooth_radius=smooth_radius,
         )
+
+    def save_quantification(self, file_=None, use_bf=None, **kwargs):
+        if file_ is None:
+            file_ = self.fig_key
+        if use_bf is None:
+            use_bf = self.bf
+
+        out_active, out_fix = self._analysis(**kwargs)
+        projs_active = out_active["proj_gen"]
+        feats_active = out_active["feats_gen"]
+
+        projs_fix = out_fix["proj_gen"]
+        feats_fix = out_fix["feats_gen"]
+        bhv_feats_fix = out_fix["bhv_feats"]
+
+        quant_fix = sla.quantify_error_pattern_sessions(
+            projs_fix, feats_fix, bhv_feats=bhv_feats_fix, average_folds=True,
+        )
+        quant_active = sla.quantify_error_pattern_sessions(
+            projs_active, feats_active, average_folds=True,
+        )
+        quant_out = {"task": quant_active, "fixation": quant_fix}
+
+        fname = os.path.join(use_bf, file_)
+        pickle.dump(quant_out, open(fname, "wb"))
 
 
 class BoundaryExtrapolationFigure(SequenceLearningFigure):

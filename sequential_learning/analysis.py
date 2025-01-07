@@ -673,7 +673,7 @@ def fixation_generalization_pattern(
     if len(u_shapes) > 1:
         print(u_shapes)
         raise IOError("more than one shape in data")
-        
+
     test_feats_all = []
     gen_feats_all = []
     gen_proj_all = []
@@ -976,6 +976,113 @@ def generalize_projection_pattern(
         "full_out": full_outs,
     }
     return out_dict
+
+
+def _boxcar(ref_feat, feats, radius=0.2):
+    dists = np.sqrt(np.sum((np.expand_dims(ref_feat, 0) - feats) ** 2, axis=1))
+    weights = dists < radius
+    return weights / np.sum(weights)
+
+
+def average_similar_stimuli(
+    reps,
+    feats,
+    weight_func=_boxcar,
+    **kwargs,
+):
+    new_reps = np.zeros_like(reps)
+    for i, rep_i in enumerate(reps):
+        weights = weight_func(feats[i], feats, **kwargs)
+        new_reps[i] = np.sum(np.expand_dims(weights, 1) * reps, axis=0)
+    return new_reps
+
+
+def make_average_map(
+    x_vals,
+    y_vals,
+    stim,
+    weights,
+    weight_func=_boxcar,
+    radius=0.2,
+):
+    xs, ys = np.meshgrid(x_vals, y_vals)
+    xs_flat = xs.flatten()
+    ys_flat = ys.flatten()
+
+    pts = np.stack((xs_flat, ys_flat), axis=1)
+    map_vals = np.zeros(len(pts))
+    for i, pt in enumerate(pts):
+        pt_i = np.sum(weights * weight_func(pt, stim, radius=radius), axis=0)
+        map_vals[i] = pt_i
+
+    map_use = map_vals.reshape((len(x_vals), len(y_vals)))
+    return map_use
+
+
+def quantify_task_error_pattern(
+    projs,
+    feats,
+    choice_dim=0,
+    feat_dims=(1, 2),
+    average_folds=False,
+    n_pts=50,
+    bhv_feats=None,
+    smooth_radius=0.2,
+    binary_proj=True,
+):
+    if bhv_feats is not None:
+        choices_bhv = bhv_feats[..., choice_dim]
+        feats_bhv = bhv_feats[..., feat_dims]
+        feats_proj = feats
+    else:
+        choices_bhv = feats[..., choice_dim]
+        feats_bhv = feats[..., feat_dims]
+        feats_proj = feats_bhv
+    if average_folds:
+        ax = (0, -1)
+    else:
+        ax = 1
+    if binary_proj:
+        projs = projs > 0
+    choice_mu = np.mean(np.unique(choices_bhv))
+    choices_bhv = choices_bhv - choice_mu
+    projs = np.mean(projs, axis=ax).flatten()
+    bound = np.max(np.abs(feats))
+    pts = np.linspace(-bound, bound, n_pts)
+    proj_map = make_average_map(pts, pts, feats_proj, projs, radius=smooth_radius)
+    choice_map = make_average_map(
+        pts, pts, feats_bhv, choices_bhv, radius=smooth_radius
+    )
+    null_map = np.ones_like(proj_map)
+    null_map[:, pts < 0] = -1
+    res = sts.pearsonr(proj_map.flatten(), choice_map.flatten()).statistic
+    null_res = sts.pearsonr(proj_map.flatten(), null_map.flatten()).statistic
+    return res, null_res
+
+
+def quantify_error_pattern_sessions(
+    projs, feats, n_boots=500, bhv_feats=None, proj_res_ind=1, feat_res_ind=0, **kwargs
+):
+    quant = np.zeros((n_boots, len(projs)))
+    quant_null = np.zeros_like(quant)
+    rng = np.random.default_rng()
+    for i, projs_i in enumerate(projs):
+        for j in range(n_boots):
+            n_samps = projs_i.shape[proj_res_ind]
+            inds = rng.choice(n_samps, n_samps)
+            projs_ij = projs_i[:, inds]
+            feats_ij = feats[i][inds]
+            if bhv_feats is not None:
+                n_samps_bhv = bhv_feats[i].shape[0]
+                inds_bhv = rng.choice(n_samps_bhv, n_samps_bhv)
+                bhv_feats_ij = bhv_feats[i][inds_bhv]
+            else:
+                bhv_feats_ij = None
+            res_ij = quantify_task_error_pattern(
+                projs_ij, feats_ij, bhv_feats=bhv_feats_ij, **kwargs
+            )
+            quant[j, i], quant_null[j, i] = res_ij
+    return quant, quant_null
 
 
 def error_projection_pattern(
