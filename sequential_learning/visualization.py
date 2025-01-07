@@ -441,9 +441,12 @@ def plot_shape_gen_maps(
         print(te_sims.shape, non_sims.shape)
 
 
-def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=2):
+def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=2, sort_seq=True):
     if shape_seq is None:
         shape_seq = result_dict.keys()
+    if sort_seq:
+        print(shape_seq)
+        shape_seq = np.sort(list(shape_seq))
     if axs is None:
         f, axs = plt.subplots(
             len(shape_seq),
@@ -454,11 +457,18 @@ def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=
         )
     for i, shape in enumerate(shape_seq):
         res = result_dict[shape]
-        acc, null = res[res_key]
+        acc, null = res[res_key][:2]
         sessions = np.arange(acc.shape[1])
-        gpl.plot_trace_werr(sessions, acc, ax=axs[i], conf95=True)
-        gpl.plot_trace_werr(sessions, null, ax=axs[i], conf95=True)
+        gpl.plot_trace_werr(sessions, acc, ax=axs[i], conf95=True, label="choice")
+        gpl.plot_trace_werr(sessions, null, ax=axs[i], conf95=True, label="optimal")
+        if len(res[res_key]) > 2:
+            print("mag")
+            mag = res[res_key][2]
+            print(mag)
+            gpl.plot_trace_werr(sessions, mag, ax=axs[i], conf95=True)
         axs[i].set_title(shape)
+        axs[i].set_ylabel("correlation")
+    axs[-1].set_xlabel("session")
 
 
 def project_features_common(
