@@ -560,6 +560,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         gen_field="anticat_proj",
         balance_field=None,
         gen_func=slaux.proto_box_mask,
+        combine_days_fixation=False,
         fwid=2,
         dec_ref=0,
         **kwargs,
@@ -567,6 +568,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         cf = u.ConfigParserColor()
         cf.read(config_path)
         params = cf[fig_key]
+        self.combine_days_fixation = combine_days_fixation
         self.fig_key = fig_key
         self.region = (region,)
         self.fig_folder = fig_folder
@@ -625,7 +627,6 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
             t_start = self.params.getfloat("t_start")
             binsize = self.params.getfloat("binsize")
             binstep = self.params.getfloat("binstep")
-            combine_days_fix = self.params.getboolean("combine_days_fixation")
             active_out = sla.generalize_projection_pattern(
                 data,
                 self.dec_field,
@@ -651,7 +652,7 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
                 dec_ref=self.dec_ref,
                 min_trials=self.min_trials,
                 bhv_feats=bhv_feats,
-                combine_days=combine_days_fix,
+                combine_days=self.combine_days_fixation,
             )
             self.data[fkey] = (active_out, fix_out)
         return self.data[fkey]
@@ -666,11 +667,10 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         feats_bhv = out_dict_fix["bhv_feats"]
         projs = out_dict_fix["proj_gen"]
         feats = out_dict_fix["feats_gen"]
-        combine_days = self.params.getboolean("combine_days_fixation")
 
         projs_active = out_dict_active["proj_gen"]
         feats_active = out_dict_active["feats_gen"]
-        if combine_days:
+        if self.combine_days_fixation:
             feats_bhv = feats_bhv * len(feats_active)
             projs = projs * len(projs_active)
             feats = feats * len(feats_active)

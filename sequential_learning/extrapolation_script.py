@@ -33,6 +33,7 @@ def create_parser():
     parser.add_argument("--use_prototypes", default=False, action="store_true")
     parser.add_argument("--balance_complement", default=False, action="store_true")
     parser.add_argument("--no_fixation", default=False, action="store_true")
+    parser.add_argument("--combine_days", default=False, action="store_true")
     return parser
 
 
@@ -85,6 +86,7 @@ def main():
         gen_func=gen_func,
         balance_field=use_balance_field,
         dec_ref=dec_ref,
+        combine_days_fixation=args.combine_days
     )
     fig.panel_pattern()
 
