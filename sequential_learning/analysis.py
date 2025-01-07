@@ -982,7 +982,6 @@ def error_projection_pattern(
     data,
     dec_field,
     t_start=0,
-    t_end=0,
     binsize=500,
     binstep=500,
     regions=("IT",),
@@ -1006,7 +1005,7 @@ def error_projection_pattern(
     pops, xs = data.get_neural_activity(
         binsize,
         t_start,
-        t_end,
+        t_start,
         binstep,
         time_zero_field=time_zero_field,
         regions=regions,
