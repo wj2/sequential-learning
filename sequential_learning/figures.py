@@ -793,7 +793,7 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             tbeg = self.params.getfloat("t_start")
             binsize = self.params.getfloat("binsize")
             out_proto, out_nonproto = sla.prototype_extrapolation_info(
-                data, tbeg=tbeg, winsize=binsize, regions=self.regions
+                data, tbeg=tbeg, winsize=binsize, regions=self.region
             )
             out_res = sla.prototype_extrapolation(out_proto, out_nonproto)
             self.data[fkey] = out_res
