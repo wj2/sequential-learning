@@ -781,7 +781,7 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             1,
         )
         proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
-        targ_ax = self.get_axs((self.gs[: trs - 2],), squeeze=False)[0, 0]
+        targ_ax = self.get_axs((self.gs[:trs, :],), squeeze=False)[0, 0]
         gss["panel_pattern"] = (proj_axs, targ_ax)
 
         self.gss = gss
