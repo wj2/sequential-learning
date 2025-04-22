@@ -8,6 +8,7 @@ import sklearn.decomposition as skd
 import sklearn.linear_model as sklm
 import sklearn.preprocessing as skp
 import sklearn.svm as skm
+import functools as ft
 
 import general.plotting as gpl
 import general.utility as u
@@ -170,6 +171,83 @@ def compute_basis(basis_vecs):
     return basis
 
 
+def _vec_ai(v1, v2):
+    return np.trace(v1.T @ v2 @ v2.T @ v1) / 2
+
+
+def _vec_ai_samples(v1s, v2s):
+    out = np.zeros(len(v1s))
+    for i, v1_i in enumerate(v1s):
+        out[i] = _vec_ai(v1_i, v2s[i])
+    return out
+
+
+@gpl.ax_adder()
+def plot_reduced_cross_projections(
+    dv1,
+    dv2,
+    dv1_color=None,
+    dv2_color=None,
+    cross_color=None,
+    ref_ind=-1,
+    t_ind=0,
+    ax=None,
+    **kwargs,
+):
+    cross = np.zeros((dv1[0].shape[0], len(dv2), len(dv1)))
+    dv2_within = np.zeros((dv2[0].shape[0], len(dv2), len(dv2)))
+    dv1_within = np.zeros((dv1[0].shape[0], len(dv1), len(dv1)))
+    for i, dv2_i in enumerate(dv2):
+        dv2_i = compute_basis((dv2_i[..., t_ind],))
+        for j, dv1_j in enumerate(dv1):
+            dv1_j = compute_basis((dv1_j[..., t_ind],))
+            cross[:, i, j] = _vec_ai_samples(dv1_j, dv2_i)
+        for j, dv2_j in enumerate(dv2):
+            dv2_j = compute_basis((dv2_j[..., t_ind],))
+            dv2_within[:, i, j] = _vec_ai_samples(dv2_i, dv2_j)
+            if i == j:
+                dv2_within[:, i, j] = np.nan
+    for i, dv1_i in enumerate(dv1):
+        dv1_i = compute_basis((dv1_i[..., t_ind],))
+        for j, dv1_j in enumerate(dv1):
+            dv1_j = compute_basis((dv1_j[..., t_ind],))
+            dv1_within[:, i, j] = _vec_ai_samples(
+                dv1_i,
+                dv1_j,
+            )
+            if i == j:
+                dv1_within[:, i, j] = np.nan
+    sessions2 = np.arange(1, len(dv2) + 1)
+    sessions1 = np.arange(1, len(dv1) + 1)
+    gpl.plot_trace_werr(
+        sessions2,
+        np.mean(cross, axis=0).T,
+        ax=ax,
+        conf95=True,
+        color=cross_color,
+        **kwargs,
+    )
+    gpl.plot_trace_werr(
+        sessions2,
+        np.mean(dv2_within, axis=0).T,
+        ax=ax,
+        conf95=True,
+        color=dv1_color,
+        **kwargs,
+    )
+    gpl.plot_trace_werr(
+        sessions1,
+        np.mean(dv1_within, axis=0).T,
+        ax=ax,
+        conf95=True,
+        color=dv2_color,
+        **kwargs,
+    )
+    ax.set_xlabel("session number")
+    ax.set_ylabel("subspace alignment")
+    gpl.add_hlines(0, ax)
+
+
 def plot_all_cross_projections(*dvs, cmaps=None, color_bounds=(0.2, 0.9), **kwargs):
     n_dvs = len(dvs)
     if cmaps is None:
@@ -315,6 +393,17 @@ def plot_full_generalization(
 
 
 @gpl.ax_adder()
+def visualize_task_coeffs(coeffs, s=2, ax=None):
+    for i, pts in enumerate(coeffs):
+        ax.scatter(*pts.T)
+    circ = s * u.radian_to_sincos(np.linspace(-np.pi, np.pi, 100))
+    ax.plot(*circ.T, color="k")
+    ax.plot([-s, s], [0, 0], color="k")
+    ax.plot([0, 0], [-s, s], color="k")
+    ax.set_aspect("equal")
+
+
+@gpl.ax_adder()
 def plot_gen_scatter(
     feat_i,
     feat_choice,
@@ -441,7 +530,9 @@ def plot_shape_gen_maps(
         print(te_sims.shape, non_sims.shape)
 
 
-def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=2, sort_seq=True):
+def visualize_map_matching(
+    result_dict, res_key, shape_seq=None, axs=None, fwid=2, sort_seq=True
+):
     if shape_seq is None:
         shape_seq = result_dict.keys()
     if sort_seq:
@@ -459,16 +550,96 @@ def visualize_map_matching(result_dict, res_key, shape_seq=None, axs=None, fwid=
         res = result_dict[shape]
         acc, null = res[res_key][:2]
         sessions = np.arange(acc.shape[1])
-        gpl.plot_trace_werr(sessions, acc, ax=axs[i], conf95=True, label="choice")
-        gpl.plot_trace_werr(sessions, null, ax=axs[i], conf95=True, label="optimal")
+        gpl.plot_trace_werr(
+            sessions, acc, ax=axs[i], points=True, conf95=True, label="choice"
+        )
+        gpl.plot_trace_werr(
+            sessions, null, ax=axs[i], points=True, conf95=True, label="optimal"
+        )
         if len(res[res_key]) > 2:
             print("mag")
             mag = res[res_key][2]
             print(np.mean(mag))
-            gpl.plot_trace_werr(sessions, mag, ax=axs[i], conf95=True)
+            gpl.plot_trace_werr(sessions, mag, ax=axs[i], points=True, conf95=True)
         axs[i].set_title(shape)
         axs[i].set_ylabel("correlation")
     axs[-1].set_xlabel("session")
+
+
+def time_projection_learning(
+    path,
+    dvs_all,
+    pair_ref,
+    pair_tc,
+    fax=None,
+    n_repeats=50,
+    flip_sessions=None,
+    dpi=300,
+    **kwargs,
+):
+    if fax is None:
+        fax = plt.subplots(1, 1, subplot_kw={"projection": "3d"})
+    f, ax = fax
+
+    if flip_sessions is None:
+        flip_sessions = ()
+    pairs_tc_singles = list((pair_ref, pair_tc_i) for pair_tc_i in pair_tc)
+    pairs_tc = []
+    session_nums = np.repeat(np.arange(1, len(pairs_tc_singles) + 1), n_repeats)
+    for pts in pairs_tc_singles:
+        pairs_tc.extend((pts,) * n_repeats)
+
+    _, _, p = project_features_common_tc(pairs_tc[0], dvs_all, ret_pca=True, **kwargs)
+    plot_func = ft.partial(project_features_common_tc, dvs_all=dvs_all, p=p, **kwargs)
+
+    def plot_func(pairs, ax=None, ind=None, **kwargs_new):
+        project_features_common_tc(
+            pairs,
+            dvs_all=dvs_all,
+            ax=ax,
+            p=p,
+            flip_color=session_nums[ind] in flip_sessions,
+            **kwargs,
+            **kwargs_new,
+        )
+        gpl.clean_3d_plot(ax)
+        gpl.make_3d_bars(ax, bar_len=1, center=(-1.5, -1.5, -1.5))
+        ax.set_title("session {}".format(session_nums[ind]), y=.8)
+
+    gpl.animate_plot(f, ax, path, pairs_tc, plot_func, three_dim=True, dpi=dpi)
+
+
+def project_features_common_tc(pairs, dvs_all=None, **kwargs):
+    return project_features_common(dvs_all, *pairs, **kwargs)
+
+
+def project_features_pts(
+    dvs_all,
+    *pairs,
+    t_ind=0,
+    ret_pca=False,
+    p=None,
+    use_map=True,
+    radius=0.15,
+):
+    basis = compute_basis(list(dv[..., t_ind] for dv in dvs_all))
+    proj_all = []
+    for pop_p, fvs_p in pairs:
+        pop_pt = pop_p[..., t_ind]
+        proj = np.swapaxes(basis, -1, -2) @ pop_pt
+        proj = np.mean(proj, axis=0).T
+        new_feats, proj = sla.average_similar_stimuli(
+            proj, fvs_p, radius=radius, use_map=use_map
+        )
+        proj_all.append((new_feats, proj))
+    if p is None:
+        p = skd.PCA(3)
+        p.fit(np.concatenate(list(p[1] for p in proj_all), axis=0))
+    proj_pts = []
+    for i, (feats, proj) in enumerate(proj_all):
+        pts = p.transform(proj)
+        proj_pts.append((feats, pts))
+    return proj_pts
 
 
 def project_features_common(
@@ -482,6 +653,9 @@ def project_features_common(
     radius=0.15,
     vmin=-1,
     vmax=1,
+    ret_pca=False,
+    p=None,
+    flip_color=False,
 ):
     if color_maps is None:
         color_maps = ("magma",) * len(pairs)
@@ -489,21 +663,16 @@ def project_features_common(
         f, ax = plt.subplots(1, 1, subplot_kw={"projection": "3d"})
     else:
         f = None
-    basis = compute_basis(list(dv[..., t_ind] for dv in dvs_all))
-    proj_all = []
-    for pop_p, fvs_p in pairs:
-        pop_pt = pop_p[..., t_ind]
-        proj = np.swapaxes(basis, -1, -2) @ pop_pt
-        proj = np.mean(proj, axis=0).T
-        proj = sla.average_similar_stimuli(proj, fvs_p, radius=radius)
-        proj_all.append(proj)
-    p = skd.PCA(3)
-    p.fit_transform(np.concatenate(proj_all, axis=0))
-    for i, proj in enumerate(proj_all):
-        pts = p.transform(proj)
+    proj_pts = project_features_pts(
+        dvs_all, *pairs, t_ind=t_ind, ret_pca=ret_pca, p=p, radius=radius
+    )
+    for i, (new_feats, proj) in enumerate(proj_pts):
+        c = new_feats[:, fv_ind]
+        if flip_color:
+            c = c * -1
         ax.scatter(
-            *pts.T,
-            c=pairs[i][1][:, fv_ind],
+            *proj.T,
+            c=c,
             cmap=color_maps[i],
             s=ms,
             vmin=vmin,
@@ -513,7 +682,10 @@ def project_features_common(
     ax.set_xlabel("dim 1")
     ax.set_ylabel("dim 2")
     ax.set_zlabel("dim 3")
-    return f, ax
+    out = f, ax
+    if ret_pca:
+        out = f, ax, p
+    return out
 
 
 @gpl.ax_adder()

@@ -5,12 +5,100 @@ import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
 import sklearn.linear_model as sklm
 import sklearn.metrics.pairwise as skmp
+import sklearn.model_selection as skms
 import pandas as pd
 
 import general.utility as u
 import general.neural_analysis as na
 
 import sequential_learning.auxiliary as slaux
+
+
+def prototype_extrapolation_info(
+    data,
+    time_zero_field="stim_on",
+    tbeg=0,
+    winsize=500,
+    regions=("IT",),
+    stim_feats=("cat_proj", "anticat_proj"),
+    choice_field="chosen_cat",
+    targ_field="stim_sample_MAIN",
+    min_neurs=10,
+    proto_thr=0.9,
+    zscore=True,
+):
+    pops, xs = data.get_neural_activity(
+        winsize, tbeg, tbeg, time_zero_field=time_zero_field, regions=regions
+    )
+    r_mask = list(pop.shape[1] > min_neurs for pop in pops)
+    pops = list(pop for i, pop in enumerate(pops) if r_mask[i])
+    data = data.session_mask(r_mask)
+    feats = data[list(stim_feats)]
+    choice = data[choice_field]
+    targ = data[targ_field]
+
+    proto_mask = slaux.get_strict_prototype_masks(data, single_mask=True)[0]
+    proto_session = list(np.mean(x.to_numpy()) > proto_thr for x in proto_mask)
+
+    pops_proto = []
+    feats_proto = []
+    choice_proto = []
+    targ_proto = []
+    proto_info = (pops_proto, feats_proto, choice_proto, targ_proto)
+
+    pops_nonproto = []
+    feats_nonproto = []
+    choice_nonproto = []
+    targ_nonproto = []
+    nonproto_info = (pops_nonproto, feats_nonproto, choice_nonproto, targ_nonproto)
+    for i, pop in enumerate(pops):
+        if zscore:
+            pop = na.zscore_tc_shape(pop)
+        if proto_session[i]:
+            mask = proto_mask[i]
+            pops_s, feats_s, choice_s, targ_s = proto_info
+        else:
+            mask = np.ones(pop.shape[0], dtype=bool)
+            pops_s, feats_s, choice_s, targ_s = nonproto_info
+        pops_s.append(pop[mask])
+        feats_s.append(feats[i][mask].to_numpy())
+        choice_s.append(choice[i][mask].to_numpy())
+        targ_s.append(targ[i][mask].to_numpy())
+    names = ("pops", "feats", "choice", "targ")
+    out_proto = dict(zip(names, proto_info))
+    out_nonproto = dict(zip(names, nonproto_info))
+    return out_proto, out_nonproto
+
+
+def prototype_extrapolation(proto_info, nonproto_info, folds_n=50, **kwargs):
+    pops_tr = np.concatenate(proto_info["pops"], axis=0)
+    targ_tr = np.concatenate(proto_info["targ"], axis=0)
+    choice_tr = np.concatenate(proto_info["choice"], axis=0)
+    balance_tr = np.stack((targ_tr, choice_tr), axis=1)
+
+    out = na.fold_skl_shape(
+        pops_tr,
+        targ_tr,
+        folds_n,
+        rel_flat=balance_tr,
+        balance_rel_fields=True,
+        **kwargs,
+    )
+
+    pops_te = nonproto_info["pops"]
+    projs = []
+    feats_comb = []
+    for i, pop_te in enumerate(pops_te):
+        proj_i = na.project_on_estimators(out["estimators"], np.swapaxes(pop_te, 0, 1))
+        feats_comb_i = np.concatenate(
+            (nonproto_info["choice"][i][:, None], nonproto_info["feats"][i]), axis=1
+        )
+        feats_comb.append(feats_comb_i)
+        projs.append(np.swapaxes(proj_i, 1, 2))
+    nonproto_info["proj"] = projs
+    nonproto_info["feats_comb"] = feats_comb
+
+    return nonproto_info
 
 
 def get_shape_resps(
@@ -989,13 +1077,26 @@ def average_similar_stimuli(
     reps,
     feats,
     weight_func=_boxcar,
+    use_map=False,
+    n_map_pts=25,
+    radius=0.15,
     **kwargs,
 ):
-    new_reps = np.zeros_like(reps)
-    for i, rep_i in enumerate(reps):
-        weights = weight_func(feats[i], feats, **kwargs)
+    if use_map:
+        mins, maxs = np.min(feats, axis=0), np.max(feats, axis=0)
+        new_feats_x, new_feats_y = np.meshgrid(
+            np.linspace(mins[0] + radius, maxs[0] - radius, n_map_pts),
+            np.linspace(mins[1] + radius, maxs[1] - radius, n_map_pts),
+        )
+        new_feats = np.stack((new_feats_x.flatten(), new_feats_y.flatten()), axis=1)
+        new_reps = np.zeros((len(new_feats),) + reps.shape[1:])
+    else:
+        new_feats = feats
+        new_reps = np.zeros_like(reps)
+    for i, new_rep_i in enumerate(new_reps):
+        weights = weight_func(new_feats[i], feats, radius=radius, **kwargs)
         new_reps[i] = np.sum(np.expand_dims(weights, 1) * reps, axis=0)
-    return new_reps
+    return new_feats, new_reps
 
 
 def make_average_map(
@@ -1018,6 +1119,51 @@ def make_average_map(
 
     map_use = map_vals.reshape((len(x_vals), len(y_vals)))
     return map_use
+
+
+def quantify_task_error_lr_sessions(
+        projs, feats, n_folds=50, **kwargs
+):
+    out = np.zeros((len(projs), n_folds, 2))
+    for i, proj in enumerate(projs):
+        out[i] = quantify_task_error_lr(proj, feats[i], **kwargs)
+    return out
+
+
+def quantify_task_error_lr(
+    projs,
+    feats,
+    choice_dim=0,
+    feat_dims=(1, 2),
+    average_folds=True,
+    n_folds=50,
+    test_prop=0.1,
+):
+    if average_folds:
+        ax = (0, -1)
+    else:
+        ax = 1
+    projs = np.mean(projs, axis=ax)
+    targ = feats[:, choice_dim]
+
+    k = skgp.kernels.ConstantKernel() * skgp.kernels.RBF() + skgp.kernels.WhiteKernel()
+    gp = skgp.GaussianProcessRegressor(k)
+    gp.fit(feats[:, feat_dims], projs)
+    proj_feat = gp.predict(feats[:, feat_dims])
+    
+    regs = np.stack((proj_feat, feats[:, feat_dims[0]]), axis=1)
+    pipe = na.make_model_pipeline(sklm.LogisticRegression, pca=None, norm=True)
+    out = skms.cross_validate(
+        pipe,
+        regs,
+        targ,
+        cv=skms.ShuffleSplit(n_folds, test_size=test_prop),
+        return_estimator=True,
+    )
+    coeffs = np.concatenate(list(x[-1].coef_ for x in out["estimator"]), axis=0)
+    # coeffs = u.make_unit_vector(coeffs)
+    # rad = 2 * u.sincos_to_radian(coeffs[:, 0], coeffs[:, 1]) / np.pi
+    return coeffs
 
 
 def quantify_task_error_pattern(
@@ -1060,14 +1206,18 @@ def quantify_task_error_pattern(
     choice_map = choice_map.flatten()
     null_map = null_map.flatten()
     vec = choice_map - null_map
-    vec_norm = np.nansum(vec ** 2)
+    vec_norm = np.nansum(vec**2)
     mag = np.nansum((proj_map - null_map) * vec) / vec_norm
-    res = pd.DataFrame(
-        np.stack((proj_map.flatten(), choice_map.flatten()), axis=1)
-    ).corr().to_numpy()[0, 1]
-    null_res = pd.DataFrame(
-        np.stack((proj_map.flatten(), null_map.flatten()), axis=1)
-    ).corr().to_numpy()[0, 1]
+    res = (
+        pd.DataFrame(np.stack((proj_map.flatten(), choice_map.flatten()), axis=1))
+        .corr()
+        .to_numpy()[0, 1]
+    )
+    null_res = (
+        pd.DataFrame(np.stack((proj_map.flatten(), null_map.flatten()), axis=1))
+        .corr()
+        .to_numpy()[0, 1]
+    )
     return res, null_res, mag
 
 

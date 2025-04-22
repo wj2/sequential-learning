@@ -774,16 +774,13 @@ def get_strict_prototype_masks(
     *datas,
     cat_proj_field="cat_proj",
     anticat_proj_field="anticat_proj",
-    min_cat_bound=0.42,
-    max_cat_bound=0.71,
-    ac_bound=0.141,
     single_mask=False,
 ):
     masks = []
     for data in datas:
         cat = data[cat_proj_field]
         acat = data[anticat_proj_field]
-        ret_m = _box_mask(cat, acat)
+        ret_m = _box_mask(cat, acat, single_mask=single_mask)
         masks.append(ret_m)
     return masks
 

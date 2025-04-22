@@ -190,7 +190,7 @@ class ANNContinualLearning(SequenceLearningFigure):
         self.shapes = shapes
         fsize = (fwid, fwid * len(shapes))
         super().__init__(fsize, params, colors=colors, **kwargs)
-    
+
     def make_gss(self):
         gss = {}
         proj_grid = pu.make_mxn_gridspec(
@@ -215,8 +215,6 @@ class ANNContinualLearning(SequenceLearningFigure):
 
         if self.data.get(key) is None or retrain:
             img_reps = slar.get_representations(shapes=self.shapes)
-            
-
 
 
 class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
@@ -332,7 +330,10 @@ class ANNBoundaryExtrapolationFigure(SequenceLearningFigure):
         lv_projs = (lv_proj,) * len(bhv_feats)
         gen_projs = (gen_proj,) * len(bhv_feats)
         quant_out = sla.quantify_error_pattern_sessions(
-            lv_projs, gen_projs, bhv_feats=bhv_feats, average_folds=True,
+            lv_projs,
+            gen_projs,
+            bhv_feats=bhv_feats,
+            average_folds=True,
         )
 
         fname = os.path.join(use_bf, file_)
@@ -707,15 +708,108 @@ class FixationBoundaryExtrapolationFigure(SequenceLearningFigure):
         bhv_feats_fix = out_fix["bhv_feats"]
 
         quant_fix = sla.quantify_error_pattern_sessions(
-            projs_fix, feats_fix, bhv_feats=bhv_feats_fix, average_folds=True,
+            projs_fix,
+            feats_fix,
+            bhv_feats=bhv_feats_fix,
+            average_folds=True,
         )
         quant_active = sla.quantify_error_pattern_sessions(
-            projs_active, feats_active, average_folds=True,
+            projs_active,
+            feats_active,
+            average_folds=True,
         )
         quant_out = {"task": quant_active, "fixation": quant_fix}
 
         fname = os.path.join(use_bf, file_)
         pickle.dump(quant_out, open(fname, "wb"))
+
+
+class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
+    def __init__(
+        self,
+        shape=None,
+        exper_data=None,
+        fig_key="prototype_boundary_extrapolation_figure",
+        region="IT",
+        fig_folder="",
+        uniform_resample=False,
+        fwid=2,
+        **kwargs,
+    ):
+        cf = u.ConfigParserColor()
+        cf.read(config_path)
+        params = cf[fig_key]
+        self.fig_key = fig_key
+        self.region = (region,)
+        self.fig_folder = fig_folder
+        self.uniform_resample = uniform_resample
+        if exper_data is not None:
+            add_data = {"exper_data": exper_data}
+            data = kwargs.get("data", {})
+            data.update(add_data)
+            kwargs["data"] = data
+            self.shape = exper_data["shape"].iloc[0]
+        elif shape is not None:
+            self.shape = shape
+        else:
+            raise IOError("either data or shape must be provided")
+
+        self.params = params
+        self.data = kwargs.pop("data", {})
+        n_panels = self._get_n_panels()
+        fsize = (fwid * 3, fwid * (n_panels + 1))
+        super().__init__(fsize, params, data=self.get_data(), colors=colors, **kwargs)
+
+    def _get_n_panels(self):
+        out_res = self._analysis()
+        n_panels = len(out_res["proj"])
+        return n_panels
+
+    def make_gss(self):
+        gss = {}
+        n_panels = self._get_n_panels()
+        trs = int(np.round(100 / (n_panels + 1)))
+        proj_grid = pu.make_mxn_gridspec(
+            self.gs,
+            n_panels,
+            2,
+            trs + 2,
+            100,
+            0,
+            100,
+            1,
+            1,
+        )
+        proj_axs = self.get_axs(proj_grid, squeeze=False, sharex="all", sharey="all")
+        targ_ax = self.get_axs((self.gs[: trs - 2],), squeeze=False)[0, 0]
+        gss["panel_pattern"] = (proj_axs, targ_ax)
+
+        self.gss = gss
+
+    def _analysis(self, recompute=False):
+        data = self.load_shape_data(shape=self.shape)
+        fkey = ("main_analysis", self.shape)
+        if self.data.get(fkey) is None or recompute:
+            tbeg = self.params.getfloat("t_start")
+            binsize = self.params.getfloat("binsize")
+            out_proto, out_nonproto = sla.prototype_extrapolation_info(
+                data, tbeg=tbeg, winsize=binsize, regions=self.regions
+            )
+            out_res = sla.prototype_extrapolation(out_proto, out_nonproto)
+            self.data[fkey] = out_res
+        return self.data[fkey]
+
+    def panel_pattern(self, **kwargs):
+        key = "panel_pattern"
+        axs, ax_targ = self.gss[key]
+
+        out_dict = self._analysis(**kwargs)
+        projs = out_dict["proj"]
+        feats = out_dict["feats_comb"]
+        slv.plot_full_generalization(projs, feats, axs=axs, average_folds=True)
+
+        out = sla.quantify_task_error_lr_sessions(projs, feats)
+        slv.visualize_task_coeffs(out, ax=ax_targ)
 
 
 class BoundaryExtrapolationFigure(SequenceLearningFigure):
@@ -1073,9 +1167,10 @@ class RelativeTransitionFigure(SequenceLearningFigure):
 
     def _analysis(
         self,
+        recompute=False,
     ):
         data_dict = self.load_shape_groups()
-        if self.data.get("main_analysis") is None:
+        if self.data.get("main_analysis") is None or recompute:
             t_start = self.params.getfloat("t_start")
             t_end = self.params.getfloat("t_end")
             binsize = self.params.getfloat("binsize")
@@ -1128,10 +1223,10 @@ class RelativeTransitionFigure(SequenceLearningFigure):
         ang_ax.set_xlabel("task alignment")
         gpl.clean_plot(ang_ax, 1)
 
-    def panel_dec(self):
+    def panel_dec(self, **kwargs):
         key = "panel_dec"
         vis_ax, ang_ax = self.gss[key]
-        out = self._analysis()
+        out = self._analysis(**kwargs)
 
         s1, s2 = self.shape_sequence
         s1_full_sampled = np.where(slaux.fully_sampled(out[s1]["feats"]))[0]
