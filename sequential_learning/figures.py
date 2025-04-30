@@ -815,6 +815,25 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         # slv.visualize_task_coeffs(out, ax=ax_targ)
 
 
+
+class EarlyPrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
+    def __init__(
+        self,
+        fig_key="early_prototype_boundary_extrapolation_figure",
+        **kwargs,
+    ):
+        super().__init__(fig_key=fig_key, **kwargs)
+        
+
+class LatePrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
+    def __init__(
+        self,
+        fig_key="late_prototype_boundary_extrapolation_figure",
+        **kwargs,
+    ):
+        super().__init__(fig_key=fig_key, **kwargs)
+
+
 class BoundaryExtrapolationFigure(SequenceLearningFigure):
     def __init__(
         self,
