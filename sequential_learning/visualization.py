@@ -410,6 +410,24 @@ def visualize_task_error_quant(*scores, ax=None):
 
 
 @gpl.ax_adder()
+def visualize_task_error_scatter(xs, ys, ax=None, ident_color=(0.8,) * 3, **kwargs):
+    gpl.plot_trace_werr(
+        xs.T,
+        ys.T,
+        ax=ax,
+        confstd=True,
+        fill=False,
+        points=True,
+        no_lines=True,
+        **kwargs,
+    )
+
+    min_pt = np.min([np.mean(xs, axis=1), np.mean(ys, axis=1)])
+    max_pt = np.max([np.mean(xs, axis=1), np.mean(ys, axis=1)])
+    ax.plot([min_pt, max_pt], [min_pt, max_pt], color=ident_color)
+
+
+@gpl.ax_adder()
 def plot_gen_scatter(
     feat_i,
     feat_choice,
@@ -434,7 +452,9 @@ def plot_gen_scatter(
 
 
 @gpl.ax_adder()
-def plot_gp_map(gp, pt_range=(-.7, .7), n_pts=50, ax=None, vmin=-1, vmax=1, cmap="bwr"):
+def plot_gp_map(
+    gp, pt_range=(-0.7, 0.7), n_pts=50, ax=None, vmin=-1, vmax=1, cmap="bwr"
+):
     pts = np.linspace(*pt_range, n_pts)
     xs, ys = np.meshgrid(pts, pts)
     pts_all = np.stack((xs.flatten(), ys.flatten()), axis=1)
@@ -445,7 +465,6 @@ def plot_gp_map(gp, pt_range=(-.7, .7), n_pts=50, ax=None, vmin=-1, vmax=1, cmap
     ax.set_xticks(pt_range)
     ax.set_yticks(pt_range)
     ax.set_aspect("equal")
-
 
 
 @gpl.ax_adder()
@@ -625,7 +644,7 @@ def time_projection_learning(
         )
         gpl.clean_3d_plot(ax)
         gpl.make_3d_bars(ax, bar_len=1, center=(-1.5, -1.5, -1.5))
-        ax.set_title("session {}".format(session_nums[ind]), y=.8)
+        ax.set_title("session {}".format(session_nums[ind]), y=0.8)
 
     gpl.animate_plot(f, ax, path, pairs_tc, plot_func, three_dim=True, dpi=dpi)
 

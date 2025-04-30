@@ -1099,6 +1099,47 @@ def average_similar_stimuli(
     return new_feats, new_reps
 
 
+def balanced_decode(
+    data,
+    targ_field,
+    tbeg,
+    tend,
+    winsize=500,
+    stepsize=20,
+    choice_field="targ_cho",
+    cat_field="stim_sample_MAIN",
+    tzf="stim_on",
+    regions=("IT",),
+    filter_nan=True,
+    **kwargs,
+):
+    m1 = data[targ_field] == 1
+    m2 = data[targ_field] == 2
+
+    dec, xs = data.decode_masks(
+        m1,
+        m2,
+        winsize,
+        tbeg,
+        tend,
+        stepsize,
+        time_zero_field=tzf,
+        balance_fields=(choice_field, cat_field,),
+        regions=regions,
+    )
+    if filter_nan:
+        dec = list(d for d in dec if not np.all(np.isnan(d)))
+    return dec, xs
+
+
+def decode_balanced_choice(data, *args, **kwargs):
+    return balanced_decode(data, "targ_cho", *args, **kwargs)
+
+
+def decode_balanced_category(data, *args, **kwargs):
+    return balanced_decode(data, "stim_sample_MAIN", *args, **kwargs)
+
+
 def make_average_map(
     x_vals,
     y_vals,
@@ -1204,9 +1245,7 @@ def quantify_task_error_lr(
         cv=skms.ShuffleSplit(n_folds, test_size=test_prop),
         return_estimator=True,
     )
-    coeffs_feat = np.concatenate(
-        list(x[-1].coef_ for x in out["estimator"]), axis=0
-    )
+    coeffs_feat = np.concatenate(list(x[-1].coef_ for x in out["estimator"]), axis=0)
     score_feat = out_feat["test_score"]
 
     outs_null = []
