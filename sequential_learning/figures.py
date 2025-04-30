@@ -809,7 +809,10 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         slv.plot_full_generalization(projs, feats, axs=axs, average_folds=True)
 
         out = sla.quantify_task_error_lr_sessions(projs, feats)
-        slv.visualize_task_coeffs(out, ax=ax_targ)
+        slv.visualize_task_error_quant(
+            out["score"], out["score_null"], out["score_feat"], ax=ax_targ
+        )
+        # slv.visualize_task_coeffs(out, ax=ax_targ)
 
 
 class BoundaryExtrapolationFigure(SequenceLearningFigure):

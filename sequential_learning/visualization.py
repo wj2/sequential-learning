@@ -393,14 +393,20 @@ def plot_full_generalization(
 
 
 @gpl.ax_adder()
-def visualize_task_coeffs(coeffs, s=2, ax=None):
+def visualize_task_coeffs(coeffs, s=2, ax=None, **kwargs):
     for i, pts in enumerate(coeffs):
-        ax.scatter(*pts.T)
+        ax.scatter(*pts.T, **kwargs)
     circ = s * u.radian_to_sincos(np.linspace(-np.pi, np.pi, 100))
     ax.plot(*circ.T, color="k")
     ax.plot([-s, s], [0, 0], color="k")
     ax.plot([0, 0], [-s, s], color="k")
     ax.set_aspect("equal")
+
+
+@gpl.ax_adder()
+def visualize_task_error_quant(*scores, ax=None):
+    for score in scores:
+        ax.hist(score.flatten(), density=True, histtype="step")
 
 
 @gpl.ax_adder()
@@ -425,6 +431,21 @@ def plot_gen_scatter(
     gpl.add_vlines(0, ax, color="k")
     gpl.clean_plot(ax, 1)
     gpl.clean_plot_bottom(ax)
+
+
+@gpl.ax_adder()
+def plot_gp_map(gp, pt_range=(-.7, .7), n_pts=50, ax=None, vmin=-1, vmax=1, cmap="bwr"):
+    pts = np.linspace(*pt_range, n_pts)
+    xs, ys = np.meshgrid(pts, pts)
+    pts_all = np.stack((xs.flatten(), ys.flatten()), axis=1)
+    proj = gp.predict(pts_all)
+
+    p_map = np.reshape(proj, (n_pts, n_pts))
+    gpl.pcolormesh(pts, pts, p_map, ax=ax, vmin=vmin, vmax=vmax, cmap=cmap)
+    ax.set_xticks(pt_range)
+    ax.set_yticks(pt_range)
+    ax.set_aspect("equal")
+
 
 
 @gpl.ax_adder()

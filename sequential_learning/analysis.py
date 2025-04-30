@@ -1121,13 +1121,45 @@ def make_average_map(
     return map_use
 
 
-def quantify_task_error_lr_sessions(
-        projs, feats, n_folds=50, **kwargs
-):
-    out = np.zeros((len(projs), n_folds, 2))
+def quantify_task_error_lr_sessions(projs, feats, n_folds=50, **kwargs):
+    out_dicts = []
     for i, proj in enumerate(projs):
-        out[i] = quantify_task_error_lr(proj, feats[i], **kwargs)
+        out_i = quantify_task_error_lr(proj, feats[i], **kwargs)
+        out_dicts.append(out_i)
+    out = u.aggregate_dictionary(out_dicts)
     return out
+
+
+def _corr_gp(feats, projs, fix_k=None, null=False):
+    if fix_k is None:
+        k = (
+            skgp.kernels.ConstantKernel() * skgp.kernels.RBF()
+            + skgp.kernels.WhiteKernel()
+        )
+    if fix_k is not None:
+        hdict = fix_k.get_params()
+        k = skgp.kernels.ConstantKernel(
+            constant_value=hdict["k1__k1__constant_value"],
+            constant_value_bounds="fixed",
+        ) * skgp.kernels.RBF(
+            length_scale=hdict["k1__k2__length_scale"],
+            length_scale_bounds="fixed",
+        ) + skgp.kernels.WhiteKernel(
+            noise_level=hdict["k2__noise_level"], noise_level_bounds="fixed"
+        )
+    gp = skgp.GaussianProcessRegressor(k)
+    if null:
+        rng = np.random.default_rng()
+        m1, m2 = slaux.box_mask_array(feats, single_mask=False)
+        projs_fit_m1 = rng.permuted(projs[m1], axis=0)
+        projs_fit_m2 = rng.permuted(projs[m2], axis=0)
+        projs_fit = np.concatenate((projs_fit_m1, projs_fit_m2), axis=0)
+        feats_fit = np.concatenate((feats[m1], feats[m2]), axis=0)
+    else:
+        feats_fit = feats
+        projs_fit = projs
+    gp.fit(feats_fit, projs_fit)
+    return gp.predict(feats), gp
 
 
 def quantify_task_error_lr(
@@ -1136,8 +1168,10 @@ def quantify_task_error_lr(
     choice_dim=0,
     feat_dims=(1, 2),
     average_folds=True,
+    include_feature=False,
     n_folds=50,
-    test_prop=0.1,
+    n_nulls=50,
+    test_prop=0.2,
 ):
     if average_folds:
         ax = (0, -1)
@@ -1146,11 +1180,10 @@ def quantify_task_error_lr(
     projs = np.mean(projs, axis=ax)
     targ = feats[:, choice_dim]
 
-    k = skgp.kernels.ConstantKernel() * skgp.kernels.RBF() + skgp.kernels.WhiteKernel()
-    gp = skgp.GaussianProcessRegressor(k)
-    gp.fit(feats[:, feat_dims], projs)
-    proj_feat = gp.predict(feats[:, feat_dims])
-    
+    proj_feat, gp = _corr_gp(feats[:, feat_dims], projs)
+    regs = proj_feat[:, None]
+    if include_feature:
+        regs = np.concatenate((regs, feats[:, feat_dims[0]][:, None]), axis=1)
     regs = np.stack((proj_feat, feats[:, feat_dims[0]]), axis=1)
     pipe = na.make_model_pipeline(sklm.LogisticRegression, pca=None, norm=True)
     out = skms.cross_validate(
@@ -1161,9 +1194,59 @@ def quantify_task_error_lr(
         return_estimator=True,
     )
     coeffs = np.concatenate(list(x[-1].coef_ for x in out["estimator"]), axis=0)
-    # coeffs = u.make_unit_vector(coeffs)
-    # rad = 2 * u.sincos_to_radian(coeffs[:, 0], coeffs[:, 1]) / np.pi
-    return coeffs
+    score = out["test_score"]
+
+    pipe = na.make_model_pipeline(sklm.LogisticRegression, pca=None, norm=True)
+    out_feat = skms.cross_validate(
+        pipe,
+        feats[:, feat_dims[0]][:, None],
+        targ,
+        cv=skms.ShuffleSplit(n_folds, test_size=test_prop),
+        return_estimator=True,
+    )
+    coeffs_feat = np.concatenate(
+        list(x[-1].coef_ for x in out["estimator"]), axis=0
+    )
+    score_feat = out_feat["test_score"]
+
+    outs_null = []
+    for i in range(n_nulls):
+        null_feat, gp_null = _corr_gp(
+            feats[:, feat_dims], projs, null=True, fix_k=gp.kernel_
+        )
+        regs_null = null_feat[:, None]
+        if include_feature:
+            regs_null = np.concatenate(
+                (regs_null, feats[:, feat_dims[0]][:, None]), axis=1
+            )
+        pipe = na.make_model_pipeline(sklm.LogisticRegression, pca=None, norm=True)
+        out = skms.cross_validate(
+            pipe,
+            regs_null,
+            targ,
+            cv=skms.ShuffleSplit(n_folds, test_size=test_prop),
+            return_estimator=True,
+        )
+        coeffs_null = np.concatenate(
+            list(x[-1].coef_ for x in out["estimator"]), axis=0
+        )
+        out_null_i = {
+            "coeffs_null": coeffs_null,
+            "score_null": out["test_score"],
+            "gp_null": gp_null,
+        }
+        outs_null.append(out_null_i)
+    out_null = u.aggregate_dictionary(outs_null)
+
+    out = {
+        "score": score,
+        "coeffs": coeffs,
+        "gp": gp,
+        "score_feat": score_feat,
+        "coeffs_feat": coeffs_feat,
+    }
+    out.update(out_null)
+    return out
 
 
 def quantify_task_error_pattern(
