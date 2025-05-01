@@ -816,7 +816,7 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         feats = out_dict["feats_comb"]
         slv.plot_full_generalization(projs, feats, axs=axs, average_folds=True)
 
-        if self.data.get(key) or recompute:
+        if self.data.get(key) is None or recompute:
             out = sla.quantify_task_error_lr_sessions(projs, feats)
             self.data[key] = out
 
