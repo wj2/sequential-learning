@@ -21,6 +21,19 @@ FIXATIONFOLDER = os.path.join(ROOTFOLDER, "fixation")
 STIMFOLDER = os.path.join(ROOTFOLDER, "stimuli")
 
 
+extrap_template = (
+    "prototype-extrap_(?P<shape>[At0-9]+)_{region}_{time}_{runind}\\.pkl"
+)
+
+
+def load_runinds(runind, region, time, template=extrap_template, folder=BASEFOLDER):
+    path = template.format(region=region, time=time, runind=runind)
+    out_shapes = {}
+    for fl, gd, data in u.load_folder_regex_generator(folder, path):
+        out_shapes[gd["shape"]] = data
+    return out_shapes
+
+
 ft1 = (
     "A(?P<date>[0-9a-z]+)\\.(?P<region>[A-Z0-9+]+)\\.learn(?P<shape>A[0-9])"
     "\\-d(?P<day>[0-9]+)\\.[0-9]+\\.FIRA\\.mat"

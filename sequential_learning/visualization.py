@@ -17,6 +17,21 @@ import sequential_learning.auxiliary as slaux
 
 
 @gpl.ax_adder()
+def plot_all_pattern_scores(
+    runind,
+    region="IT",
+    time="",
+    folder="sequential_learning/extrap-proto/",
+    ax=None,
+):
+    shapes = slaux.load_runinds(runind, region, time, folder=folder)
+    for k, res in shapes.items():
+        visualize_task_error_scatter(res["score_feat"], res["score"], ax=ax)
+    ax.set_xlabel("feature predictivity")
+    ax.set_ylabel("geometry predictivity")
+
+
+@gpl.ax_adder()
 def plot_shape_scatter(
     pops,
     k1,

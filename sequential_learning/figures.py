@@ -841,7 +841,6 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         pickle.dump(quant_save, open(fp, "wb"))
         
 
-
 class EarlyPrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
     def __init__(
         self,
