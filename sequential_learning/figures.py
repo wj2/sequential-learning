@@ -835,8 +835,10 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             use_bf = self.bf
 
         quant = self.data.get("panel_pattern")
+        save_keys = ("score", "score_feat", "score_null")
+        quant_save = {k: quant[k] for k in save_keys}
         fp = os.path.join(use_bf, file_)
-        pickle.dump(quant, open(fp, "wb"))
+        pickle.dump(quant_save, open(fp, "wb"))
         
 
 
