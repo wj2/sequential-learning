@@ -73,4 +73,4 @@ def main():
         add="-".join(add),
     )
     fig.save(fname + ".pdf", use_bf=args.output_folder)
-    
+    fig.save_quantification(fname + ".pkl", use_bf=args.output_folder)

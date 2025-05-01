@@ -30,10 +30,8 @@ def prototype_extrapolation_info(
     pops, xs = data.get_neural_activity(
         winsize, tbeg, tbeg, time_zero_field=time_zero_field, regions=regions
     )
-    print(list(p.shape for p in pops))
     r_mask = list(pop.shape[1] > min_neurs for pop in pops)
     pops = list(pop for i, pop in enumerate(pops) if r_mask[i])
-    print(list(p.shape for p in pops))
     data = data.session_mask(r_mask)
     feats = data[list(stim_feats)]
     choice = data[choice_field]

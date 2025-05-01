@@ -801,7 +801,7 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             self.data[fkey] = out_res
         return self.data[fkey]
 
-    def panel_pattern(self, **kwargs):
+    def panel_pattern(self, recompute=False, **kwargs):
         key = "panel_pattern"
         axs, ax_targ = self.gss[key]
 
@@ -810,13 +810,27 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         feats = out_dict["feats_comb"]
         slv.plot_full_generalization(projs, feats, axs=axs, average_folds=True)
 
-        out = sla.quantify_task_error_lr_sessions(projs, feats)
+        if self.data.get(key) or recompute:
+            out = sla.quantify_task_error_lr_sessions(projs, feats)
+            self.data[key] = out
+
+        out = self.data[key]
         slv.visualize_task_error_scatter(
             out["score_feat"],
             out["score"],
             ax=ax_targ,
         )
-        # slv.visualize_task_coeffs(out, ax=ax_targ)
+
+    def save_quantification(self, file_=None, use_bf=None, **kwargs):
+        if file_ is None:
+            file_ = self.fig_key
+        if use_bf is None:
+            use_bf = self.bf
+
+        quant = self.data.get("panel_pattern")
+        fp = os.path.join(use_bf, file_)
+        pickle.dump(quant, open(fp, "wb"))
+        
 
 
 class EarlyPrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
