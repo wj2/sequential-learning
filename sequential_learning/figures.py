@@ -2,6 +2,8 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.stats as sts
+import sklearn.neighbors as skn
+import sklearn.svm as skm
 import pickle
 
 import general.paper_utilities as pu
@@ -792,11 +794,15 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
         if self.data.get(fkey) is None or recompute:
             tbeg = self.params.getfloat("t_start")
             binsize = self.params.getfloat("binsize")
+            if self.params.getboolean("use_neighbors"):
+                use_model = skn.KNeighborsClassifier
+            else:
+                use_model = skm.LinearSVC
             out_proto, out_nonproto = sla.prototype_extrapolation_info(
                 data, tbeg=tbeg, winsize=binsize, regions=self.region
             )
             out_res = sla.prototype_extrapolation(
-                out_proto, out_nonproto,
+                out_proto, out_nonproto, use_model=use_model,
             )
             self.data[fkey] = out_res
         return self.data[fkey]

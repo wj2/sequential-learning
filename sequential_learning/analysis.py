@@ -4,8 +4,8 @@ import scipy.stats as sts
 import sklearn.svm as skm
 import sklearn.gaussian_process as skgp
 import sklearn.linear_model as sklm
-import sklearn.metrics.pairwise as skmp
 import sklearn.model_selection as skms
+import sklearn.neighbors as skn
 import pandas as pd
 
 import general.utility as u
@@ -52,7 +52,6 @@ def prototype_extrapolation_info(
     targ_nonproto = []
     nonproto_info = (pops_nonproto, feats_nonproto, choice_nonproto, targ_nonproto)
     for i, pop in enumerate(pops):
-        
         if zscore:
             pop = na.zscore_tc_shape(pop)
         if proto_session[i]:
@@ -71,18 +70,20 @@ def prototype_extrapolation_info(
     return out_proto, out_nonproto
 
 
-def prototype_extrapolation(proto_info, nonproto_info, folds_n=50, **kwargs):
+def prototype_extrapolation(
+    proto_info, nonproto_info, folds_n=50, use_model=skm.LinearSVC, **kwargs
+):
     pops_tr = np.concatenate(proto_info["pops"], axis=0)
     targ_tr = np.concatenate(proto_info["targ"], axis=0)
     choice_tr = np.concatenate(proto_info["choice"], axis=0)
     balance_tr = np.stack((targ_tr, choice_tr), axis=1)
-    print(pops_tr.shape)
 
     out = na.fold_skl_shape(
         pops_tr,
         targ_tr,
         folds_n,
         rel_flat=balance_tr,
+        model=use_model,
         balance_rel_fields=True,
         norm=False,
         pre_pca=None,
@@ -1129,7 +1130,10 @@ def balanced_decode(
         tend,
         stepsize,
         time_zero_field=tzf,
-        balance_fields=(choice_field, cat_field,),
+        balance_fields=(
+            choice_field,
+            cat_field,
+        ),
         regions=regions,
     )
     if filter_nan:
