@@ -94,7 +94,6 @@ def prototype_extrapolation(
     projs = []
     feats_comb = []
     for i, pop_te in enumerate(pops_te):
-        print(pop_te.shape)
         proj_i = na.project_on_estimators(out["estimators"], np.swapaxes(pop_te, 0, 1))
         feats_comb_i = np.concatenate(
             (nonproto_info["choice"][i][:, None], nonproto_info["feats"][i]), axis=1

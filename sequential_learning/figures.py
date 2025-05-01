@@ -9,6 +9,7 @@ import pickle
 import general.paper_utilities as pu
 import general.utility as u
 import general.plotting as gpl
+import general.neural_analysis as na
 import sequential_learning.auxiliary as slaux
 import sequential_learning.analysis as sla
 import sequential_learning.visualization as slv
@@ -795,7 +796,7 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             tbeg = self.params.getfloat("t_start")
             binsize = self.params.getfloat("binsize")
             if self.params.getboolean("use_neighbors"):
-                use_model = skn.KNeighborsClassifier
+                use_model = na.KNeighborsClassifierTwoClass
             else:
                 use_model = skm.LinearSVC
             out_proto, out_nonproto = sla.prototype_extrapolation_info(
