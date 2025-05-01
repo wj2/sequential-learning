@@ -30,8 +30,10 @@ def prototype_extrapolation_info(
     pops, xs = data.get_neural_activity(
         winsize, tbeg, tbeg, time_zero_field=time_zero_field, regions=regions
     )
+    print(list(p.shape for p in pops))
     r_mask = list(pop.shape[1] > min_neurs for pop in pops)
     pops = list(pop for i, pop in enumerate(pops) if r_mask[i])
+    print(list(p.shape for p in pops))
     data = data.session_mask(r_mask)
     feats = data[list(stim_feats)]
     choice = data[choice_field]
@@ -52,6 +54,7 @@ def prototype_extrapolation_info(
     targ_nonproto = []
     nonproto_info = (pops_nonproto, feats_nonproto, choice_nonproto, targ_nonproto)
     for i, pop in enumerate(pops):
+        
         if zscore:
             pop = na.zscore_tc_shape(pop)
         if proto_session[i]:
@@ -75,6 +78,7 @@ def prototype_extrapolation(proto_info, nonproto_info, folds_n=50, **kwargs):
     targ_tr = np.concatenate(proto_info["targ"], axis=0)
     choice_tr = np.concatenate(proto_info["choice"], axis=0)
     balance_tr = np.stack((targ_tr, choice_tr), axis=1)
+    print(pops_tr.shape)
 
     out = na.fold_skl_shape(
         pops_tr,
@@ -82,6 +86,8 @@ def prototype_extrapolation(proto_info, nonproto_info, folds_n=50, **kwargs):
         folds_n,
         rel_flat=balance_tr,
         balance_rel_fields=True,
+        norm=False,
+        pre_pca=None,
         **kwargs,
     )
 
@@ -89,6 +95,7 @@ def prototype_extrapolation(proto_info, nonproto_info, folds_n=50, **kwargs):
     projs = []
     feats_comb = []
     for i, pop_te in enumerate(pops_te):
+        print(pop_te.shape)
         proj_i = na.project_on_estimators(out["estimators"], np.swapaxes(pop_te, 0, 1))
         feats_comb_i = np.concatenate(
             (nonproto_info["choice"][i][:, None], nonproto_info["feats"][i]), axis=1

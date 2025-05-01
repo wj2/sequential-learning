@@ -795,7 +795,9 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
             out_proto, out_nonproto = sla.prototype_extrapolation_info(
                 data, tbeg=tbeg, winsize=binsize, regions=self.region
             )
-            out_res = sla.prototype_extrapolation(out_proto, out_nonproto)
+            out_res = sla.prototype_extrapolation(
+                out_proto, out_nonproto,
+            )
             self.data[fkey] = out_res
         return self.data[fkey]
 
@@ -810,10 +812,11 @@ class PrototypeBoundaryExtrapolationFigure(SequenceLearningFigure):
 
         out = sla.quantify_task_error_lr_sessions(projs, feats)
         slv.visualize_task_error_scatter(
-            out["score_feat"], out["score"], ax=ax_targ,
+            out["score_feat"],
+            out["score"],
+            ax=ax_targ,
         )
         # slv.visualize_task_coeffs(out, ax=ax_targ)
-
 
 
 class EarlyPrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
@@ -823,7 +826,7 @@ class EarlyPrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFi
         **kwargs,
     ):
         super().__init__(fig_key=fig_key, **kwargs)
-        
+
 
 class LatePrototypeBoundaryExtrapolationFigure(PrototypeBoundaryExtrapolationFigure):
     def __init__(

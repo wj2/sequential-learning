@@ -177,7 +177,7 @@ def _get_ith_feature(feats, i, shape=2):
 
 
 extrap_template = ("extrap_cat_proj-x-(prototype|anticat_proj)_"
-                   "(?P<shape>A[0-9])_{runind}\.pkl")
+                   "(?P<shape>A[0-9])_{runind}\\.pkl")
 
 def load_extrap_results(runind, folder=None, template=extrap_template):
     if folder is None:
@@ -613,7 +613,7 @@ def load_kiani_data_folder(
         monkeys.append(monkey_name)
 
         n_neur_fl = data_fl["spikeTimes"][0].shape[0]
-        if fl_info["region"] == "V4+FEF":
+        if fl_info["region"] == "V4+FEF" or fl_info["region"] == "V4":
             fef_labels = ("FEF",) * 32
             v4_labels = ("V4",) * (n_neur_fl - 32)
             labels = fef_labels + v4_labels
